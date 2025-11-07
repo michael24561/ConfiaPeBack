@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================
+// ENUMS
+// ====================
+
+enum Rol {
+  CLIENTE
+  TECNICO
+  ADMIN
+}
+
+enum EstadoTrabajo {
+  PENDIENTE
+  ACEPTADO
+  EN_PROGRESO
+  COMPLETADO
+  CANCELADO
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
+}
+
+enum TipoNotificacion {
+  NUEVO_TRABAJO
+  MENSAJE
+  CALIFICACION
+  PAGO
+  SISTEMA
+}
+
+// ====================
+// ENTIDADES CORE
+// ====================
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  nombre        String
+  telefono      String?
+  rol           Rol
+  emailVerified Boolean  @default(false)
+  avatarUrl     String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  cliente        Cliente?
+  tecnico        Tecnico?
+  mensajes       Mensaje[]
+  notificaciones Notificacion[]
+  transacciones  Transaccion[]
+  calificaciones Calificacion[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Cliente {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  direcciones         Direccion[]
+  trabajos            Trabajo[]
+  chats               Chat[]
+  favoritos           Favorito[]
+  reviews             Review[]
+  solicitudesServicio SolicitudServicio[]
+
+  @@map("clientes")
+}
+
+model Tecnico {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Información profesional (solo DNI obligatorio)
+  dni              String  @unique
+  nombres          String?
+  apellidos        String?
+  oficio           String?
+  descripcion      String? @db.Text
+  ubicacion        String?
+  experienciaAnios Int?
+
+  // Precios (opcionales)
+  precioMin Decimal? @db.Decimal(10, 2)
+  precioMax Decimal? @db.Decimal(10, 2)
+
+  // Métricas calculadas
+  calificacionPromedio Decimal @default(0) @db.Decimal(3, 2)
+  trabajosCompletados  Int     @default(0)
+
+  // Estado
+  verificado Boolean @default(false)
+  disponible Boolean @default(true)
+
+  // Geolocalización (futuro)
+  latitud  Decimal? @db.Decimal(10, 8)
+  longitud Decimal? @db.Decimal(11, 8)
+
+  // Relations
+  certificados        Certificado[]
+  servicios           Servicio[]
+  horarios            Horario[]
+  trabajos            Trabajo[]
+  reviews             Review[]
+  chats               Chat[]
+  galeria             GaleriaItem[]
+  favoritos           Favorito[]
+  configuracion       ConfiguracionTecnico?
+  transacciones       Transaccion[]
+  solicitudesServicio SolicitudServicio[]
+
+  @@index([oficio])
+  @@index([calificacionPromedio])
+  @@index([verificado, disponible])
+  @@map("tecnicos")
+}
+
+// ====================
+// RELACIONES TÉCNICO
+// ====================
+
+model Servicio {
+  id          String   @id @default(uuid())
+  tecnicoId   String
+  tecnico     Tecnico  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  nombre      String
+  descripcion String?  @db.Text
+  precio      Decimal? @db.Decimal(10, 2)
+
+  @@index([tecnicoId])
+  @@map("servicios")
+}
+
+model Certificado {
+  id             String    @id @default(uuid())
+  tecnicoId      String
+  tecnico        Tecnico   @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  nombre         String
+  institucion    String?
+  imagenUrl      String
+  fechaObtencion DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([tecnicoId])
+  @@map("certificados")
+}
+
+model Horario {
+  id         String    @id @default(uuid())
+  tecnicoId  String
+  tecnico    Tecnico   @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  diaSemana  DiaSemana
+  disponible Boolean   @default(true)
+  horaInicio String
+  horaFin    String
+
+  @@unique([tecnicoId, diaSemana])
+  @@index([tecnicoId, disponible])
+  @@map("horarios")
+}
+
+model GaleriaItem {
+  id          String   @id @default(uuid())
+  tecnicoId   String
+  tecnico     Tecnico  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  imagenUrl   String
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  @@index([tecnicoId])
+  @@map("galeria")
+}
+
+model ConfiguracionTecnico {
+  id                  String  @id @default(uuid())
+  tecnicoId           String  @unique
+  tecnico             Tecnico @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  emergencias24x7     Boolean @default(false)
+  notificacionesPush  Boolean @default(true)
+  autoAceptarTrabajos Boolean @default(false)
+
+  @@map("configuraciones_tecnico")
+}
+
+// ====================
+// TRABAJO Y REVIEW
+// ====================
+
+model Trabajo {
+  id              String        @id @default(uuid())
+  clienteId       String
+  cliente         Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tecnicoId       String
+  tecnico         Tecnico       @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  servicioNombre  String
+  descripcion     String        @db.Text
+  direccion       String
+  telefono        String
+  estado          EstadoTrabajo @default(PENDIENTE)
+  precio          Decimal?      @db.Decimal(10, 2)
+
+  fechaSolicitud  DateTime      @default(now())
+  fechaProgramada DateTime?
+  fechaCompletado DateTime?
+
+  // Relations
+  review         Review?
+  calificaciones Calificacion[]
+
+  @@index([clienteId, estado])
+  @@index([tecnicoId, estado])
+  @@index([fechaSolicitud])
+  @@map("trabajos")
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  trabajoId      String   @unique
+  trabajo        Trabajo  @relation(fields: [trabajoId], references: [id], onDelete: Cascade)
+  clienteId      String
+  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tecnicoId      String
+  tecnico        Tecnico  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  calificacion   Int
+  comentario     String   @db.Text
+  respuesta      String?  @db.Text
+
+  fechaCreacion  DateTime @default(now())
+  fechaRespuesta DateTime?
+
+  @@index([tecnicoId, calificacion])
+  @@map("reviews")
+}
+
+// ====================
+// CHAT Y MENSAJERÍA
+// ====================
+
+model Chat {
+  id                     String    @id @default(uuid())
+  clienteId              String
+  cliente                Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tecnicoId              String
+  tecnico                Tecnico   @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  ultimoMensaje          String?   @db.Text
+  ultimoMensajeTimestamp DateTime?
+  createdAt              DateTime  @default(now())
+
+  // Relations
+  mensajes Mensaje[]
+
+  @@unique([clienteId, tecnicoId])
+  @@index([clienteId])
+  @@index([tecnicoId])
+  @@map("chats")
+}
+
+model Mensaje {
+  id          String   @id @default(uuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  remitenteId String
+  remitente   User     @relation(fields: [remitenteId], references: [id], onDelete: Cascade)
+
+  texto     String   @db.Text
+  leido     Boolean  @default(false)
+  timestamp DateTime @default(now())
+
+  @@index([chatId, timestamp])
+  @@index([remitenteId])
+  @@map("mensajes")
+}
+
+// ====================
+// UTILIDADES
+// ====================
+
+model Notificacion {
+  id        String            @id @default(uuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tipo      TipoNotificacion
+  titulo    String
+  mensaje   String            @db.Text
+  leida     Boolean           @default(false)
+  timestamp DateTime          @default(now())
+  metadata  Json?
+
+  @@index([userId, leida])
+  @@index([timestamp])
+  @@map("notificaciones")
+}
+
+model Favorito {
+  id        String   @id @default(uuid())
+  clienteId String
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tecnicoId String
+  tecnico   Tecnico  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([clienteId, tecnicoId])
+  @@index([clienteId])
+  @@map("favoritos")
+}
+
+model Direccion {
+  id         String   @id @default(uuid())
+  clienteId  String
+  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  nombre     String
+  direccion  String   @db.Text
+  referencia String?
+  latitud    Decimal? @db.Decimal(10, 8)
+  longitud   Decimal? @db.Decimal(11, 8)
+
+  @@index([clienteId])
+  @@map("direcciones")
+}
+
+// ====================
+// PAGOS Y TRANSACCIONES
+// ====================
+
+enum EstadoTransaccion {
+  PENDIENTE
+  COMPLETADO
+  FALLIDO
+  CANCELADO
+}
+
+enum MetodoPago {
+  STRIPE
+  YAPE
+}
+
+model Transaccion {
+  id             String             @id @default(uuid())
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tecnicoId      String
+  tecnico        Tecnico            @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  servicioId     String?
+
+  monto          Decimal            @db.Decimal(10, 2)
+  estado         EstadoTransaccion  @default(PENDIENTE)
+  metodo         MetodoPago
+
+  // Stripe/Yape
+  paymentIntentId String? @unique
+  paymentLinkId   String? @unique
+  paymentLinkUrl  String?
+
+  fechaCreacion   DateTime @default(now())
+  fechaCompletado DateTime?
+
+  @@index([userId])
+  @@index([tecnicoId])
+  @@index([estado])
+  @@map("transacciones")
+}
+
+// ====================
+// SOLICITUDES DE SERVICIO
+// ====================
+
+enum EstadoSolicitud {
+  PENDIENTE
+  ACEPTADA
+  RECHAZADA
+  COMPLETADA
+  CANCELADA
+}
+
+model SolicitudServicio {
+  id          String          @id @default(uuid())
+  clienteId   String
+  cliente     Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tecnicoId   String
+  tecnico     Tecnico         @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+
+  descripcion String          @db.Text
+  ubicacion   String
+  fotos       String          @db.Text // JSON array
+  fechaServicio DateTime?
+  estado      EstadoSolicitud @default(PENDIENTE)
+
+  fechaCreacion DateTime @default(now())
+  fechaRespuesta DateTime?
+
+  @@index([clienteId, estado])
+  @@index([tecnicoId, estado])
+  @@map("solicitudes_servicio")
+}
+
+// ====================
+// CALIFICACIONES
+// ====================
+
+model Calificacion {
+  id         String   @id @default(uuid())
+  trabajoId  String
+  trabajo    Trabajo  @relation(fields: [trabajoId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  puntuacion Int
+  comentario String   @db.Text
+  fotos      String   @db.Text // JSON array
+  esPublico  Boolean  @default(true)
+
+  fechaCreacion DateTime @default(now())
+
+  @@index([trabajoId])
+  @@index([userId])
+  @@map("calificaciones")
+}

@@ -1,0 +1,1209 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ConfiaPE API",
+    "description": "API RESTful para plataforma de contratación de técnicos profesionales en Perú",
+    "version": "1.0.0",
+    "contact": {
+      "name": "ConfiaPE Team",
+      "email": "soporte@confiape.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Servidor de desarrollo"
+    },
+    {
+      "url": "https://api.confiape.com",
+      "description": "Servidor de producción"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Autenticación y gestión de usuarios"
+    },
+    {
+      "name": "Técnicos",
+      "description": "Gestión de perfiles de técnicos"
+    },
+    {
+      "name": "Trabajos",
+      "description": "Solicitudes de trabajo y gestión de estados"
+    },
+    {
+      "name": "Reviews",
+      "description": "Sistema de calificaciones y reseñas"
+    },
+    {
+      "name": "Chat",
+      "description": "Mensajería entre clientes y técnicos"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Estadísticas y métricas para técnicos"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token JWT de autenticación. Formato: Bearer {token}"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "example": "Mensaje de error"
+          },
+          "details": {
+            "type": "object"
+          }
+        }
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "telefono": {
+            "type": "string",
+            "nullable": true
+          },
+          "rol": {
+            "type": "string",
+            "enum": ["CLIENTE", "TECNICO", "ADMIN"]
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Tecnico": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dni": {
+            "type": "string"
+          },
+          "nombres": {
+            "type": "string",
+            "nullable": true
+          },
+          "apellidos": {
+            "type": "string",
+            "nullable": true
+          },
+          "oficio": {
+            "type": "string",
+            "nullable": true
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "ubicacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "experienciaAnios": {
+            "type": "integer",
+            "nullable": true
+          },
+          "precioMin": {
+            "type": "number",
+            "nullable": true
+          },
+          "precioMax": {
+            "type": "number",
+            "nullable": true
+          },
+          "calificacionPromedio": {
+            "type": "number"
+          },
+          "trabajosCompletados": {
+            "type": "integer"
+          },
+          "verificado": {
+            "type": "boolean"
+          },
+          "disponible": {
+            "type": "boolean"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "Trabajo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "servicioNombre": {
+            "type": "string"
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "direccion": {
+            "type": "string"
+          },
+          "telefono": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "enum": ["PENDIENTE", "ACEPTADO", "EN_PROGRESO", "COMPLETADO", "CANCELADO"]
+          },
+          "precio": {
+            "type": "number",
+            "nullable": true
+          },
+          "fechaSolicitud": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaProgramada": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "fechaCompletado": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "calificacion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comentario": {
+            "type": "string"
+          },
+          "respuesta": {
+            "type": "string",
+            "nullable": true
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaRespuesta": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Verifica el estado del servidor",
+        "tags": ["Sistema"],
+        "responses": {
+          "200": {
+            "description": "Servidor funcionando correctamente"
+          }
+        }
+      }
+    },
+    "/api/auth/register/cliente": {
+      "post": {
+        "summary": "Registro de cliente",
+        "description": "Crea una nueva cuenta de cliente",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nombreCompleto", "email", "password"],
+                "properties": {
+                  "nombreCompleto": { "type": "string", "minLength": 3 },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 8 },
+                  "telefono": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cliente registrado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "user": {
+                      "id": "550e8400-e29b-41d4-a716-446655440000",
+                      "email": "juan@example.com",
+                      "nombre": "Juan Pérez",
+                      "telefono": "+51987654321",
+                      "rol": "CLIENTE",
+                      "avatarUrl": null
+                    },
+                    "tokens": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "success": false,
+                  "error": "Validación fallida",
+                  "details": [
+                    { "field": "email", "message": "Email inválido" }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email ya registrado",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "success": false,
+                  "error": "Ya existe un registro con estos datos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register/tecnico": {
+      "post": {
+        "summary": "Registro de técnico",
+        "description": "Crea una nueva cuenta de técnico con certificados",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["nombreCompleto", "email", "password", "dni"],
+                "properties": {
+                  "nombreCompleto": { "type": "string" },
+                  "email": { "type": "string" },
+                  "password": { "type": "string" },
+                  "dni": { "type": "string" },
+                  "oficio": { "type": "string" },
+                  "descripcion": { "type": "string" },
+                  "certificado": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Técnico registrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "user": {
+                      "id": "550e8400-e29b-41d4-a716-446655440001",
+                      "email": "tecnico@example.com",
+                      "nombre": "Carlos Méndez",
+                      "rol": "TECNICO"
+                    },
+                    "tokens": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "DNI inválido"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Iniciar sesión",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login exitoso con tokens",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "user": {
+                      "id": "550e8400-e29b-41d4-a716-446655440000",
+                      "email": "juan@example.com",
+                      "nombre": "Juan Pérez",
+                      "telefono": "+51987654321",
+                      "rol": "CLIENTE",
+                      "avatarUrl": null
+                    },
+                    "tokens": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales inválidas",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "Email o contraseña incorrectos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Obtener perfil actual",
+        "tags": ["Auth"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Perfil del usuario",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "email": "juan@example.com",
+                    "nombre": "Juan Pérez",
+                    "telefono": "+51987654321",
+                    "rol": "CLIENTE",
+                    "avatarUrl": null,
+                    "perfilId": "cliente-uuid"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "Token no proporcionado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "summary": "Refrescar token",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nuevo access token",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tecnicos": {
+      "get": {
+        "summary": "Listar técnicos",
+        "description": "Lista de técnicos con filtros y paginación",
+        "tags": ["Técnicos"],
+        "parameters": [
+          { "name": "categoria", "in": "query", "schema": { "type": "string" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Búsqueda por nombre" },
+          { "name": "calificacionMin", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 5 } },
+          { "name": "disponible", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "verificado", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de técnicos con paginación",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "tecnicos": [
+                      {
+                        "id": "tecnico-uuid-1",
+                        "dni": "12345678",
+                        "nombres": "Carlos",
+                        "apellidos": "Méndez",
+                        "oficio": "Electricista",
+                        "descripcion": "Electricista con 10 años de experiencia",
+                        "ubicacion": "Lima, Perú",
+                        "experienciaAnios": 10,
+                        "precioMin": 50,
+                        "precioMax": 200,
+                        "calificacionPromedio": 4.8,
+                        "trabajosCompletados": 156,
+                        "verificado": true,
+                        "disponible": true,
+                        "user": {
+                          "nombre": "Carlos Méndez",
+                          "avatarUrl": "https://cloudinary.com/avatar.jpg"
+                        }
+                      }
+                    ],
+                    "pagination": {
+                      "total": 45,
+                      "page": 1,
+                      "limit": 20,
+                      "totalPages": 3,
+                      "hasNext": true,
+                      "hasPrev": false
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tecnicos/me": {
+      "get": {
+        "summary": "Mi perfil de técnico",
+        "tags": ["Técnicos"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Perfil del técnico",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "tecnico-uuid",
+                    "dni": "12345678",
+                    "nombres": "Carlos",
+                    "apellidos": "Méndez",
+                    "oficio": "Electricista",
+                    "descripcion": "Electricista profesional",
+                    "ubicacion": "Lima, Perú",
+                    "calificacionPromedio": 4.8,
+                    "trabajosCompletados": 156,
+                    "disponible": true,
+                    "verificado": true,
+                    "servicios": [
+                      {
+                        "id": "servicio-1",
+                        "nombre": "Instalación eléctrica",
+                        "precio": 150
+                      }
+                    ],
+                    "certificados": [],
+                    "galeria": []
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "No autenticado" },
+          "403": { "description": "Solo técnicos" }
+        }
+      },
+      "put": {
+        "summary": "Actualizar mi perfil",
+        "tags": ["Técnicos"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombres": { "type": "string" },
+                  "apellidos": { "type": "string" },
+                  "oficio": { "type": "string" },
+                  "descripcion": { "type": "string" },
+                  "ubicacion": { "type": "string" },
+                  "disponible": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Perfil actualizado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "tecnico-uuid",
+                    "nombres": "Carlos",
+                    "apellidos": "Méndez",
+                    "oficio": "Electricista Senior",
+                    "disponible": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tecnicos/{id}": {
+      "get": {
+        "summary": "Ver perfil de técnico",
+        "tags": ["Técnicos"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Perfil del técnico" },
+          "404": { "description": "Técnico no encontrado" }
+        }
+      }
+    },
+    "/api/trabajos": {
+      "get": {
+        "summary": "Mis trabajos",
+        "description": "Lista trabajos según el rol del usuario",
+        "tags": ["Trabajos"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "estado", "in": "query", "schema": { "type": "string", "enum": ["PENDIENTE", "ACEPTADO", "EN_PROGRESO", "COMPLETADO", "CANCELADO"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de trabajos",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": "trabajo-uuid",
+                      "servicioNombre": "Instalación eléctrica",
+                      "descripcion": "Instalar tomacorrientes",
+                      "direccion": "Av. Arequipa 123",
+                      "telefono": "+51987654321",
+                      "estado": "PENDIENTE",
+                      "precio": null,
+                      "fechaSolicitud": "2024-01-15T10:00:00Z",
+                      "fechaProgramada": null,
+                      "cliente": {
+                        "id": "cliente-uuid",
+                        "user": {
+                          "nombre": "Juan Pérez",
+                          "avatarUrl": null
+                        }
+                      },
+                      "tecnico": {
+                        "id": "tecnico-uuid",
+                        "oficio": "Electricista"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear solicitud de trabajo",
+        "description": "Solo clientes pueden crear trabajos",
+        "tags": ["Trabajos"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tecnicoId", "servicioNombre", "descripcion", "direccion", "telefono"],
+                "properties": {
+                  "tecnicoId": { "type": "string", "format": "uuid" },
+                  "servicioNombre": { "type": "string" },
+                  "descripcion": { "type": "string", "minLength": 10 },
+                  "direccion": { "type": "string" },
+                  "telefono": { "type": "string" },
+                  "fechaProgramada": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Trabajo creado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "trabajo-uuid",
+                    "servicioNombre": "Instalación eléctrica",
+                    "descripcion": "Instalar tomacorrientes en 3 habitaciones",
+                    "direccion": "Av. Arequipa 123, Lima",
+                    "telefono": "+51987654321",
+                    "estado": "PENDIENTE",
+                    "fechaSolicitud": "2024-01-15T10:00:00Z",
+                    "clienteId": "cliente-uuid",
+                    "tecnicoId": "tecnico-uuid"
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Solo clientes" }
+        }
+      }
+    },
+    "/api/trabajos/{id}": {
+      "get": {
+        "summary": "Ver trabajo",
+        "tags": ["Trabajos"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del trabajo",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "trabajo-uuid",
+                    "servicioNombre": "Instalación eléctrica",
+                    "descripcion": "Instalar tomacorrientes",
+                    "estado": "ACEPTADO",
+                    "precio": 150,
+                    "fechaSolicitud": "2024-01-15T10:00:00Z",
+                    "fechaProgramada": "2024-01-20T14:00:00Z",
+                    "cliente": {
+                      "user": { "nombre": "Juan Pérez" }
+                    },
+                    "tecnico": {
+                      "oficio": "Electricista",
+                      "user": { "nombre": "Carlos Méndez" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trabajos/{id}/estado": {
+      "patch": {
+        "summary": "Cambiar estado del trabajo",
+        "description": "Técnico acepta, inicia o completa trabajo",
+        "tags": ["Trabajos"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nuevoEstado": { "type": "string", "enum": ["ACEPTADO", "EN_PROGRESO", "COMPLETADO"] },
+                  "precio": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estado actualizado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "trabajo-uuid",
+                    "estado": "COMPLETADO",
+                    "precio": 150,
+                    "fechaCompletado": "2024-01-20T18:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/tecnico/{tecnicoId}": {
+      "get": {
+        "summary": "Reviews de un técnico",
+        "tags": ["Reviews"],
+        "parameters": [
+          { "name": "tecnicoId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de reviews",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "reviews": [
+                      {
+                        "id": "review-uuid",
+                        "calificacion": 5,
+                        "comentario": "Excelente trabajo, muy profesional",
+                        "respuesta": "Gracias por tu confianza",
+                        "fechaCreacion": "2024-01-21T10:00:00Z",
+                        "fechaRespuesta": "2024-01-21T14:00:00Z",
+                        "cliente": {
+                          "user": {
+                            "nombre": "Juan Pérez",
+                            "avatarUrl": null
+                          }
+                        },
+                        "trabajo": {
+                          "servicioNombre": "Instalación eléctrica"
+                        }
+                      }
+                    ],
+                    "pagination": {
+                      "total": 156,
+                      "page": 1,
+                      "limit": 10
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews": {
+      "post": {
+        "summary": "Crear review",
+        "description": "Cliente califica trabajo completado",
+        "tags": ["Reviews"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["trabajoId", "calificacion", "comentario"],
+                "properties": {
+                  "trabajoId": { "type": "string" },
+                  "calificacion": { "type": "integer", "minimum": 1, "maximum": 5 },
+                  "comentario": { "type": "string", "minLength": 10 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Review creada",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "review-uuid",
+                    "calificacion": 5,
+                    "comentario": "Excelente trabajo, muy profesional y puntual",
+                    "fechaCreacion": "2024-01-21T10:00:00Z",
+                    "trabajoId": "trabajo-uuid",
+                    "tecnicoId": "tecnico-uuid",
+                    "clienteId": "cliente-uuid"
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Solo clientes" }
+        }
+      }
+    },
+    "/api/chat/conversations": {
+      "get": {
+        "summary": "Mis conversaciones",
+        "tags": ["Chat"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Lista de chats",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": "chat-uuid",
+                      "ultimoMensaje": {
+                        "texto": "¿Cuándo puedes venir?",
+                        "fechaCreacion": "2024-01-15T16:00:00Z"
+                      },
+                      "mensajesNoLeidos": 2,
+                      "cliente": {
+                        "user": { "nombre": "Juan Pérez" }
+                      },
+                      "tecnico": {
+                        "oficio": "Electricista",
+                        "user": { "nombre": "Carlos Méndez" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear conversación",
+        "description": "Cliente inicia chat con técnico",
+        "tags": ["Chat"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tecnicoId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Conversación creada",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "chat-uuid",
+                    "clienteId": "cliente-uuid",
+                    "tecnicoId": "tecnico-uuid",
+                    "fechaCreacion": "2024-01-15T10:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/messages": {
+      "post": {
+        "summary": "Enviar mensaje",
+        "tags": ["Chat"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chatId": { "type": "string" },
+                  "texto": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Mensaje enviado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "mensaje-uuid",
+                    "chatId": "chat-uuid",
+                    "texto": "Hola, ¿cuándo puedes venir?",
+                    "senderId": "user-uuid",
+                    "leido": false,
+                    "fechaCreacion": "2024-01-15T16:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/stats": {
+      "get": {
+        "summary": "Estadísticas generales",
+        "description": "Métricas del técnico",
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Estadísticas",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "trabajosTotal": 156,
+                    "ingresosTotal": 23400,
+                    "calificacionPromedio": 4.8,
+                    "reviewsTotal": 145,
+                    "trabajosPorEstado": {
+                      "PENDIENTE": 3,
+                      "ACEPTADO": 2,
+                      "EN_PROGRESO": 1,
+                      "COMPLETADO": 150,
+                      "CANCELADO": 0
+                    },
+                    "ultimosTrabajos": []
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Solo técnicos" }
+        }
+      }
+    },
+    "/api/dashboard/ingresos": {
+      "get": {
+        "summary": "Ingresos del técnico",
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "periodo", "in": "query", "schema": { "type": "string", "enum": ["semana", "mes", "año"], "default": "mes" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Datos de ingresos con gráficos",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "periodo": "mes",
+                    "ingresoTotal": 3200,
+                    "ingresosPorFecha": {
+                      "2024-01-15": 500,
+                      "2024-01-16": 300,
+                      "2024-01-17": 450
+                    },
+                    "topServicios": [
+                      { "nombre": "Instalación eléctrica", "ingresos": 1200, "cantidad": 8 },
+                      { "nombre": "Reparación", "ingresos": 800, "cantidad": 6 }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/clientes": {
+      "get": {
+        "summary": "Lista de clientes",
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Clientes del técnico",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "clientes": [
+                      {
+                        "nombre": "Juan Pérez",
+                        "trabajosRealizados": 3,
+                        "ultimoTrabajo": "2024-01-20",
+                        "totalGastado": 450
+                      }
+                    ],
+                    "clientesNuevos": 12,
+                    "clientesRecurrentes": 45
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/rendimiento": {
+      "get": {
+        "summary": "Métricas de rendimiento",
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Indicadores de performance",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "tasaExito": 95.5,
+                    "tiempoRespuestaPromedio": 2.5,
+                    "satisfaccionCliente": 96,
+                    "trabajosCompletadosATiempo": 148,
+                    "trabajosCompletadosTarde": 2
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
