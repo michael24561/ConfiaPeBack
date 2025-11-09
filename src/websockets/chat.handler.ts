@@ -2,21 +2,12 @@ import { Server, Socket } from 'socket.io';
 import { chatService } from '../services/chat.service';
 import { logger } from '../config/logger';
 
-// Mapa de usuarios conectados (userId -> socketId)
-const connectedUsers = new Map<string, string>();
-
 export const chatHandler = (io: Server, socket: Socket) => {
   const userId = socket.data.user.id;
   const userRol = socket.data.user.rol;
 
-  logger.info(`Usuario ${userId} conectado al chat`);
-
-  // Registrar usuario conectado
-  connectedUsers.set(userId, socket.id);
-
-  // Notificar a otros usuarios que este usuario está online
-  socket.broadcast.emit('user_online', { userId });
-
+  logger.info(`[Chat] Handlers de chat registrados para usuario ${userId}`);
+  
   /**
    * Unirse a una sala de chat
    */
@@ -115,31 +106,4 @@ export const chatHandler = (io: Server, socket: Socket) => {
     socket.leave(`chat:${chatId}`);
     logger.info(`Usuario ${userId} salió del chat ${chatId}`);
   });
-
-  /**
-   * Desconexión
-   */
-  socket.on('disconnect', () => {
-    // Eliminar de usuarios conectados
-    connectedUsers.delete(userId);
-
-    // Notificar a otros usuarios que este usuario está offline
-    socket.broadcast.emit('user_offline', { userId });
-
-    logger.info(`Usuario ${userId} desconectado del chat`);
-  });
-};
-
-/**
- * Verifica si un usuario está online
- */
-export const isUserOnline = (userId: string): boolean => {
-  return connectedUsers.has(userId);
-};
-
-/**
- * Obtiene el socket ID de un usuario
- */
-export const getUserSocketId = (userId: string): string | undefined => {
-  return connectedUsers.get(userId);
 };

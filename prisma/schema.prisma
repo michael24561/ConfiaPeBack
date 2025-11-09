@@ -100,14 +100,8 @@ model Tecnico {
   oficio           String?
   descripcion      String? @db.Text
   ubicacion        String?
-  experienciaAnios Int?
-
-  // Precios (opcionales)
-  precioMin Decimal? @db.Decimal(10, 2)
-  precioMax Decimal? @db.Decimal(10, 2)
-
-  // Métricas calculadas
-  calificacionPromedio Decimal @default(0) @db.Decimal(3, 2)
+  experienciaAnios   Int?        @default(0)
+  calificacionPromedio Float       @default(0)
   trabajosCompletados  Int     @default(0)
 
   // Estado

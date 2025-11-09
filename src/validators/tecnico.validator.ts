@@ -8,10 +8,9 @@ export const getTecnicosSchema = z.object({
     categoria: z.string().optional(),
     q: z.string().optional(),
     calificacionMin: z.string().transform(Number).pipe(z.number().min(1).max(5)).optional(),
-    precioMax: z.string().transform(Number).pipe(z.number().positive()).optional(),
     disponible: z.string().transform((val) => val === 'true').optional(),
     verificado: z.string().transform((val) => val === 'true').optional(),
-    orderBy: z.enum(['relevancia', 'calificacion', 'precio', 'trabajos']).optional(),
+    orderBy: z.enum(['relevancia', 'calificacion', 'trabajos']).optional(),
     page: z.string().transform(Number).pipe(z.number().int().positive()).optional(),
     limit: z.string().transform(Number).pipe(z.number().int().positive().max(50)).optional(),
   }),
@@ -30,20 +29,8 @@ export const updateTecnicoSchema = z.object({
     descripcion: z.string().min(10).max(1000).optional(),
     ubicacion: z.string().min(5).max(200).optional(),
     experienciaAnios: z.number().int().min(0).max(50).optional(),
-    precioMin: z.number().positive().optional(),
-    precioMax: z.number().positive().optional(),
     disponible: z.boolean().optional(),
-  }).refine(
-    (data) => {
-      if (data.precioMin !== undefined && data.precioMax !== undefined) {
-        return data.precioMin <= data.precioMax;
-      }
-      return true;
-    },
-    {
-      message: 'precioMin debe ser menor o igual a precioMax',
-    }
-  ),
+  }),
 });
 
 export type UpdateTecnicoInput = z.infer<typeof updateTecnicoSchema>['body'];

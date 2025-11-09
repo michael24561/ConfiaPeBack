@@ -23,7 +23,6 @@ export class TecnicoService {
       categoria,
       q: busqueda,
       calificacionMin,
-      precioMax,
       disponible,
       verificado,
       orderBy = 'relevancia',
@@ -38,7 +37,6 @@ export class TecnicoService {
       AND: [
         categoria && categoria !== 'todos' ? { oficio: categoria } : {},
         calificacionMin ? { calificacionPromedio: { gte: calificacionMin } } : {},
-        precioMax ? { precioMax: { lte: precioMax } } : {},
         disponible !== undefined ? { disponible } : {},
         verificado !== undefined ? { verificado } : {},
         busqueda
@@ -59,9 +57,6 @@ export class TecnicoService {
     switch (orderBy) {
       case 'calificacion':
         orderByClause = { calificacionPromedio: 'desc' };
-        break;
-      case 'precio':
-        orderByClause = { precioMin: 'asc' };
         break;
       case 'trabajos':
         orderByClause = { trabajosCompletados: 'desc' };
@@ -93,8 +88,6 @@ export class TecnicoService {
           ubicacion: true,
           calificacionPromedio: true,
           trabajosCompletados: true,
-          precioMin: true,
-          precioMax: true,
           experienciaAnios: true,
           verificado: true,
           disponible: true,
@@ -297,8 +290,6 @@ export class TecnicoService {
         ...(data.descripcion !== undefined && { descripcion: data.descripcion }),
         ...(data.ubicacion !== undefined && { ubicacion: data.ubicacion }),
         ...(data.experienciaAnios !== undefined && { experienciaAnios: data.experienciaAnios }),
-        ...(data.precioMin !== undefined && { precioMin: data.precioMin }),
-        ...(data.precioMax !== undefined && { precioMax: data.precioMax }),
         ...(data.disponible !== undefined && { disponible: data.disponible }),
       },
       include: {

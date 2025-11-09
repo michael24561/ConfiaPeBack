@@ -16,6 +16,7 @@ import calificacionRoutes from './routes/calificacion.routes';
 import servicioRoutes from './routes/servicio.routes';
 import uploadRoutes from './routes/upload.routes';
 import adminRoutes from './routes/admin.routes';
+import userRoutes from './routes/user.routes';
 import { setupSwagger } from './config/swagger';
 
 // Cargar variables de entorno
@@ -85,6 +86,7 @@ app.use('/api/calificaciones', calificacionRoutes);
 app.use('/api/servicios', servicioRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/users', userRoutes);
 
 // Ruta 404
 app.use('*', (_req, res) => {

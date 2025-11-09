@@ -109,8 +109,6 @@ export class AuthService {
       descripcion,
       ubicacion,
       experienciaAnios,
-      precioMin,
-      precioMax,
     } = data;
 
     // Si no hay nombres/apellidos pero hay nombre, intentar separar
@@ -186,8 +184,6 @@ export class AuthService {
           ...(descripcion && { descripcion }),
           ...(ubicacion && { ubicacion }),
           ...(experienciaAnios !== undefined && { experienciaAnios }),
-          ...(precioMin !== undefined && { precioMin }),
-          ...(precioMax !== undefined && { precioMax }),
         },
       });
 
@@ -351,8 +347,6 @@ export class AuthService {
             descripcion: true,
             ubicacion: true,
             experienciaAnios: true,
-            precioMin: true,
-            precioMax: true,
             calificacionPromedio: true,
             trabajosCompletados: true,
             verificado: true,

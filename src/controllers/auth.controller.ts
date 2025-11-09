@@ -55,23 +55,6 @@ export class AuthController {
         }
         data.experienciaAnios = parsed;
       }
-
-      if (req.body.precioMin !== undefined) {
-        const parsed = parseFloat(req.body.precioMin);
-        if (isNaN(parsed)) {
-          throw ApiError.badRequest('precioMin debe ser un número válido');
-        }
-        data.precioMin = parsed;
-      }
-
-      if (req.body.precioMax !== undefined) {
-        const parsed = parseFloat(req.body.precioMax);
-        if (isNaN(parsed)) {
-          throw ApiError.badRequest('precioMax debe ser un número válido');
-        }
-        data.precioMax = parsed;
-      }
-
       // Obtener archivos de certificados si existen
       const files = req.files as Express.Multer.File[] | undefined;
 
