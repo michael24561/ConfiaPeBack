@@ -7,9 +7,12 @@ pnpm-lock.yaml
 .env.local
 .env.*.local
 
+
 # Build
 dist/
 build/
+
+
 *.tsbuildinfo
 
 # Logs
