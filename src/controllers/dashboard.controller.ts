@@ -94,6 +94,28 @@ export class DashboardController {
       next(error);
     }
   }
+
+  /**
+   * GET /api/dashboard/cliente-stats
+   * Obtiene estadísticas para el dashboard del cliente
+   */
+  async getClienteStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw ApiError.unauthorized('Usuario no autenticado');
+      }
+
+      if (req.user.rol !== Rol.CLIENTE) {
+        throw ApiError.forbidden('Solo los clientes pueden acceder a estas estadísticas');
+      }
+
+      const result = await dashboardService.getClienteStats(req.user.id);
+
+      successResponse(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const dashboardController = new DashboardController();

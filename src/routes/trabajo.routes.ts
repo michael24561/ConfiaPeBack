@@ -1,86 +1,74 @@
-import { Router } from 'express';
-import { trabajoController } from '../controllers/trabajo.controller';
-import { validateMiddleware } from '../middlewares/validation.middleware';
-import { authMiddleware } from '../middlewares/auth.middleware';
+import { Router } from 'express'
+import { trabajoController } from '../controllers/trabajo.controller'
+import { reporteController } from '../controllers/reporte.controller'
+import { validateMiddleware } from '../middlewares/validation.middleware'
+import { authMiddleware } from '../middlewares/auth.middleware'
 import {
   createTrabajoSchema,
   getTrabajosSchema,
-  updateEstadoTrabajoSchema,
-  updateTrabajoSchema,
-} from '../validators/trabajo.validator';
+  proponerCotizacionSchema,
+} from '../validators/trabajo.validator'
+import { createReporteSchema } from '../validators/reporte.validator'
 
-const router: Router = Router();
+const router: Router = Router()
 
 // Todas las rutas requieren autenticación
-router.use(authMiddleware);
+router.use(authMiddleware)
 
-/**
- * POST /api/trabajos
- * Crea una nueva solicitud de trabajo
- * Requiere: Auth + Rol CLIENTE
- * Body: { tecnicoId, servicioNombre, descripcion, direccion, telefono, fechaProgramada? }
- */
-router.post(
-  '/',
-  validateMiddleware(createTrabajoSchema),
-  trabajoController.create.bind(trabajoController)
-);
+// =================================================================
+// RUTAS CORE
+// =================================================================
 
-/**
- * GET /api/trabajos
- * Lista trabajos del usuario autenticado
- * Requiere: Auth
- * Query: estado?, page?, limit?
- */
-router.get(
-  '/',
-  validateMiddleware(getTrabajosSchema),
-  trabajoController.getTrabajos.bind(trabajoController)
-);
+// Crea una nueva solicitud de trabajo (CLIENTE)
+router.post('/', validateMiddleware(createTrabajoSchema), trabajoController.create)
 
-/**
- * GET /api/trabajos/:id
- * Obtiene detalle de un trabajo
- * Requiere: Auth (debe ser cliente o técnico del trabajo)
- */
-router.get('/:id', trabajoController.getById.bind(trabajoController));
+// Lista trabajos del usuario autenticado (CLIENTE o TECNICO)
+router.get('/', validateMiddleware(getTrabajosSchema), trabajoController.getTrabajos)
 
-/**
- * PATCH /api/trabajos/:id/estado
- * Cambia el estado del trabajo
- * Requiere: Auth + Rol TECNICO
- * Body: { estado, precio? }
- */
-router.patch(
-  '/:id/estado',
-  validateMiddleware(updateEstadoTrabajoSchema),
-  trabajoController.updateEstado.bind(trabajoController)
-);
+// Obtiene detalle de un trabajo (CLIENTE o TECNICO)
+router.get('/:id', trabajoController.getById)
 
-/**
- * PUT /api/trabajos/:id
- * Actualiza información del trabajo (solo si PENDIENTE)
- * Requiere: Auth + Rol CLIENTE
- * Body: { servicioNombre?, descripcion?, direccion?, telefono?, fechaProgramada?, precio? }
- */
-router.put(
-  '/:id',
-  validateMiddleware(updateTrabajoSchema),
-  trabajoController.update.bind(trabajoController)
-);
+// =================================================================
+// RUTAS DE ACCIONES DEL TÉCNICO
+// =================================================================
 
-/**
- * PATCH /api/trabajos/:id/cancel
- * Cancela un trabajo
- * Requiere: Auth (cliente o técnico del trabajo)
- */
-router.patch('/:id/cancel', trabajoController.cancel.bind(trabajoController));
+// Técnico solicita una visita de evaluación
+router.post('/:id/solicitar-visita', trabajoController.solicitarVisita)
 
-/**
- * DELETE /api/trabajos/:id
- * Elimina un trabajo (solo si PENDIENTE)
- * Requiere: Auth + Rol CLIENTE
- */
-router.delete('/:id', trabajoController.delete.bind(trabajoController));
+// Técnico propone una cotización
+router.post('/:id/cotizar', validateMiddleware(proponerCotizacionSchema), trabajoController.proponerCotizacion)
 
-export default router;
+// Técnico rechaza una solicitud pendiente
+router.post('/:id/rechazar-solicitud', trabajoController.rechazarSolicitud)
+
+// Técnico inicia un trabajo aceptado
+router.post('/:id/iniciar', trabajoController.iniciarTrabajo)
+
+// Técnico completa un trabajo en progreso
+router.post('/:id/completar', trabajoController.completarTrabajo)
+
+// =================================================================
+// RUTAS DE ACCIONES DEL CLIENTE
+// =================================================================
+
+// Cliente acepta una cotización
+router.post('/:id/aceptar-cotizacion', trabajoController.aceptarCotizacion)
+
+// Cliente rechaza una cotización
+router.post('/:id/rechazar-cotizacion', trabajoController.rechazarCotizacion)
+
+// =================================================================
+// RUTA COMPARTIDA
+// =================================================================
+
+// Cancela un trabajo en curso (ACEPTADO o EN_PROGRESO)
+router.patch('/:id/cancelar', trabajoController.cancelar)
+
+// =================================================================
+// RUTA DE REPORTES
+// =================================================================
+
+// Cliente o Técnico reporta un problema con un trabajo
+router.post('/:trabajoId/reportar', validateMiddleware(createReporteSchema), reporteController.create.bind(reporteController))
+
+export default router

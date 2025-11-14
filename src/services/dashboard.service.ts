@@ -18,23 +18,14 @@ export class DashboardService {
     // Queries en paralelo para optimización
     const [
       trabajosCount,
-      ingresosTotal,
       reviewsCount,
       trabajosPorEstado,
       ultimosTrabajos,
+      trabajosCompletadosParaIngresos,
     ] = await Promise.all([
       // Total de trabajos
       prisma.trabajo.count({
         where: { tecnicoId: tecnico.id },
-      }),
-      // Ingresos totales
-      prisma.trabajo.aggregate({
-        where: {
-          tecnicoId: tecnico.id,
-          estado: EstadoTrabajo.COMPLETADO,
-          precio: { not: null },
-        },
-        _sum: { precio: true },
       }),
       // Total de reviews
       prisma.review.count({
@@ -64,19 +55,41 @@ export class DashboardService {
         orderBy: { fechaSolicitud: 'desc' },
         take: 5,
       }),
+      // Trabajos completados para calcular ingresos netos
+      prisma.trabajo.findMany({
+        where: {
+          tecnicoId: tecnico.id,
+          estado: EstadoTrabajo.COMPLETADO,
+          precio: { not: null },
+        },
+        select: { precio: true },
+      }),
     ]);
+
+    // Calcular ingresos netos (95% del total)
+    const ingresosBrutos = trabajosCompletadosParaIngresos.reduce(
+      (sum, job) => sum + Number(job.precio || 0),
+      0
+    );
+    const ingresosNetos = ingresosBrutos * 0.95;
 
     // Formatear datos
     const estadosCounts = {
       PENDIENTE: 0,
+      RECHAZADO: 0,
+      NECESITA_VISITA: 0,
+      COTIZADO: 0,
       ACEPTADO: 0,
       EN_PROGRESO: 0,
       COMPLETADO: 0,
       CANCELADO: 0,
+      EN_DISPUTA: 0,
     };
 
     trabajosPorEstado.forEach((item) => {
-      estadosCounts[item.estado] = item._count;
+      if (item.estado in estadosCounts) {
+        estadosCounts[item.estado] = item._count;
+      }
     });
 
     return {
@@ -87,12 +100,15 @@ export class DashboardService {
         aceptados: estadosCounts.ACEPTADO,
         enProgreso: estadosCounts.EN_PROGRESO,
         cancelados: estadosCounts.CANCELADO,
+        rechazados: estadosCounts.RECHAZADO,
+        necesitaVisita: estadosCounts.NECESITA_VISITA,
+        cotizados: estadosCounts.COTIZADO,
       },
       ingresos: {
-        total: Number(ingresosTotal._sum.precio || 0),
+        total: ingresosNetos,
         promedioPorTrabajo:
           estadosCounts.COMPLETADO > 0
-            ? Number(ingresosTotal._sum.precio || 0) / estadosCounts.COMPLETADO
+            ? ingresosNetos / estadosCounts.COMPLETADO
             : 0,
       },
       reviews: {
@@ -152,9 +168,10 @@ export class DashboardService {
     });
 
     // Calcular totales
-    const ingresoTotal = trabajos.reduce((sum, t) => sum + Number(t.precio || 0), 0);
+    const ingresoBrutoTotal = trabajos.reduce((sum, t) => sum + Number(t.precio || 0), 0);
+    const ingresoNetoTotal = ingresoBrutoTotal * 0.95; // Aplicar comisión del 5%
 
-    // Agrupar por fecha para gráfico
+    // Agrupar por fecha para gráfico (usando ingreso bruto para el detalle)
     const ingresosPorFecha: Record<string, number> = {};
     trabajos.forEach((trabajo) => {
       if (trabajo.fechaCompletado) {
@@ -165,7 +182,7 @@ export class DashboardService {
       }
     });
 
-    // Top servicios por ingreso
+    // Top servicios por ingreso (usando ingreso bruto)
     const serviciosIngresos: Record<string, number> = {};
     trabajos.forEach((trabajo) => {
       const servicio = trabajo.servicioNombre || 'Sin especificar';
@@ -179,9 +196,9 @@ export class DashboardService {
 
     return {
       periodo,
-      ingresoTotal,
+      ingresoTotal: ingresoNetoTotal, // Devolver el neto
       trabajosCompletados: trabajos.length,
-      promedioPorTrabajo: trabajos.length > 0 ? ingresoTotal / trabajos.length : 0,
+      promedioPorTrabajo: trabajos.length > 0 ? ingresoNetoTotal / trabajos.length : 0, // Promedio neto
       grafico: Object.entries(ingresosPorFecha).map(([fecha, ingreso]) => ({
         fecha,
         ingreso,
@@ -371,6 +388,54 @@ export class DashboardService {
         ultimos6Meses: reviewsRecientes.length,
       },
       tasaCompletado: await this.calcularTasaCompletado(tecnico.id),
+    };
+  }
+
+  /**
+   * Obtiene estadísticas generales para el dashboard del cliente
+   */
+  async getClienteStats(userId: string) {
+    const cliente = await prisma.cliente.findUnique({
+      where: { userId },
+    });
+
+    if (!cliente) {
+      throw ApiError.notFound('Perfil de cliente no encontrado');
+    }
+
+    const trabajosPorEstado = await prisma.trabajo.groupBy({
+      by: ['estado'],
+      where: { clienteId: cliente.id },
+      _count: true,
+    });
+
+    const estados = {
+      PENDIENTE: 0,
+      RECHAZADO: 0,
+      NECESITA_VISITA: 0,
+      COTIZADO: 0,
+      ACEPTADO: 0,
+      EN_PROGRESO: 0,
+      COMPLETADO: 0,
+      CANCELADO: 0,
+      EN_DISPUTA: 0,
+    };
+
+    trabajosPorEstado.forEach((item) => {
+      if (item.estado in estados) {
+        estados[item.estado] = item._count;
+      }
+    });
+
+    const totalSolicitudes = await prisma.trabajo.count({
+      where: { clienteId: cliente.id },
+    });
+
+    return {
+      totalSolicitudes,
+      solicitudesPendientes: estados.PENDIENTE,
+      trabajosEnProgreso: estados.EN_PROGRESO,
+      trabajosCompletados: estados.COMPLETADO,
     };
   }
 

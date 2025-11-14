@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { adminController } from '../controllers/admin.controller';
+import { reporteController } from '../controllers/reporte.controller';
 import { authMiddleware, roleMiddleware } from '../middlewares/auth.middleware';
+import { validateMiddleware } from '../middlewares/validation.middleware';
+import { resolveReporteSchema } from '../validators/reporte.validator';
 import { Rol } from '@prisma/client';
 
 const router: Router = Router();
@@ -38,5 +41,22 @@ router.get('/trabajos', adminController.getTrabajos.bind(adminController));
  * Lista de todos los servicios
  */
 router.get('/servicios', adminController.getServicios.bind(adminController));
+
+// =================================================================
+// RUTAS DE REPORTES (ADMIN)
+// =================================================================
+
+/**
+ * GET /api/admin/reportes
+ * Obtiene una lista de todos los trabajos en disputa.
+ */
+router.get('/reportes', reporteController.getAll.bind(reporteController));
+
+/**
+ * POST /api/admin/reportes/:trabajoId/resolver
+ * Resuelve una disputa de un trabajo.
+ */
+router.post('/reportes/:trabajoId/resolver', validateMiddleware(resolveReporteSchema), reporteController.resolve.bind(reporteController));
+
 
 export default router;

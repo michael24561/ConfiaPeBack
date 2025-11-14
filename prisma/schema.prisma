@@ -19,10 +19,14 @@ enum Rol {
 
 enum EstadoTrabajo {
   PENDIENTE
+  RECHAZADO
+  NECESITA_VISITA
+  COTIZADO
   ACEPTADO
   EN_PROGRESO
   COMPLETADO
   CANCELADO
+  EN_DISPUTA
 }
 
 enum DiaSemana {
@@ -67,6 +71,8 @@ model User {
   notificaciones Notificacion[]
   transacciones  Transaccion[]
   calificaciones Calificacion[]
+  adminChats     Chat[] @relation("AdminChat") // Add this line
+  reportes       Reporte[] @relation("Reportes")
 
   @@index([email])
   @@map("users")
@@ -228,6 +234,7 @@ model Trabajo {
   // Relations
   review         Review?
   calificaciones Calificacion[]
+  reportes       Reporte[]
 
   @@index([clienteId, estado])
   @@index([tecnicoId, estado])
@@ -263,8 +270,10 @@ model Chat {
   id                     String    @id @default(uuid())
   clienteId              String
   cliente                Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  tecnicoId              String
-  tecnico                Tecnico   @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  tecnicoId              String?   // Made optional
+  tecnico                Tecnico?  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade) // Made optional
+  adminId                String?   // New field for admin (User ID of the admin)
+  admin                  User?     @relation("AdminChat", fields: [adminId], references: [id], onDelete: Cascade) // New relation
 
   ultimoMensaje          String?   @db.Text
   ultimoMensajeTimestamp DateTime?
@@ -273,9 +282,9 @@ model Chat {
   // Relations
   mensajes Mensaje[]
 
-  @@unique([clienteId, tecnicoId])
   @@index([clienteId])
-  @@index([tecnicoId])
+  @@index([tecnicoId]) // Keep index for performance
+  @@index([adminId])   // New index for performance
   @@map("chats")
 }
 
@@ -342,6 +351,21 @@ model Direccion {
 
   @@index([clienteId])
   @@map("direcciones")
+}
+
+model Reporte {
+  id             String   @id @default(uuid())
+  motivo         String
+  descripcion    String   @db.Text
+  fecha          DateTime @default(now())
+  trabajoId      String
+  trabajo        Trabajo  @relation(fields: [trabajoId], references: [id], onDelete: Cascade)
+  reportadoPorId String
+  reportadoPor   User     @relation("Reportes", fields: [reportadoPorId], references: [id], onDelete: Cascade)
+
+  @@index([trabajoId])
+  @@index([reportadoPorId])
+  @@map("reportes")
 }
 
 // ====================

@@ -3,7 +3,14 @@ import { z } from 'zod';
 // Schema para crear conversación
 export const createConversationSchema = z.object({
   body: z.object({
-    tecnicoId: z.string().uuid('El ID del técnico debe ser un UUID válido'),
+    tecnicoId: z.string().uuid('El ID del técnico debe ser un UUID válido').optional(),
+    adminId: z.string().uuid('El ID del administrador debe ser un UUID válido').optional(),
+  }).refine(data => data.tecnicoId || data.adminId, {
+    message: 'Se debe proporcionar un tecnicoId o un adminId',
+    path: ['tecnicoId', 'adminId'],
+  }).refine(data => !(data.tecnicoId && data.adminId), {
+    message: 'No se puede proporcionar un tecnicoId y un adminId al mismo tiempo',
+    path: ['tecnicoId', 'adminId'],
   }),
 });
 

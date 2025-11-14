@@ -5,37 +5,18 @@ import { Rol } from '@prisma/client';
 
 const router: Router = Router();
 
-// Todas las rutas requieren autenticación + rol TECNICO
+// Todas las rutas requieren autenticación
 router.use(authMiddleware);
-router.use(roleMiddleware(Rol.TECNICO));
 
-/**
- * GET /api/dashboard/stats
- * Estadísticas generales del técnico
- * Requiere: Auth + Rol TECNICO
- */
-router.get('/stats', dashboardController.getStats.bind(dashboardController));
+// --- Rutas de Técnico ---
 
-/**
- * GET /api/dashboard/ingresos
- * Datos de ingresos con gráficos
- * Requiere: Auth + Rol TECNICO
- * Query: periodo? (semana|mes|año)
- */
-router.get('/ingresos', dashboardController.getIngresos.bind(dashboardController));
+router.get('/stats', roleMiddleware(Rol.TECNICO), dashboardController.getStats);
+router.get('/ingresos', roleMiddleware(Rol.TECNICO), dashboardController.getIngresos);
+router.get('/clientes', roleMiddleware(Rol.TECNICO), dashboardController.getClientes);
+router.get('/rendimiento', roleMiddleware(Rol.TECNICO), dashboardController.getRendimiento);
 
-/**
- * GET /api/dashboard/clientes
- * Lista de clientes del técnico
- * Requiere: Auth + Rol TECNICO
- */
-router.get('/clientes', dashboardController.getClientes.bind(dashboardController));
+// --- Ruta de Cliente ---
 
-/**
- * GET /api/dashboard/rendimiento
- * Estadísticas de rendimiento
- * Requiere: Auth + Rol TECNICO
- */
-router.get('/rendimiento', dashboardController.getRendimiento.bind(dashboardController));
+router.get('/cliente-stats', roleMiddleware(Rol.CLIENTE), dashboardController.getClienteStats);
 
 export default router;

@@ -22,7 +22,16 @@ export type CreateTrabajoInput = z.infer<typeof createTrabajoSchema>['body'];
 export const getTrabajosSchema = z.object({
   query: z.object({
     estado: z
-      .enum(['PENDIENTE', 'ACEPTADO', 'EN_PROGRESO', 'COMPLETADO', 'CANCELADO'])
+      .enum([
+        'PENDIENTE',
+        'RECHAZADO',
+        'NECESITA_VISITA',
+        'COTIZADO',
+        'ACEPTADO',
+        'EN_PROGRESO',
+        'COMPLETADO',
+        'CANCELADO',
+      ])
       .optional(),
     page: z.string().transform(Number).pipe(z.number().int().positive()).optional(),
     limit: z.string().transform(Number).pipe(z.number().int().positive().max(50)).optional(),
@@ -32,16 +41,15 @@ export const getTrabajosSchema = z.object({
 export type GetTrabajosInput = z.infer<typeof getTrabajosSchema>['query'];
 
 /**
- * Schema para cambiar estado de trabajo (técnico)
+ * Schema para proponer una cotización (técnico)
  */
-export const updateEstadoTrabajoSchema = z.object({
+export const proponerCotizacionSchema = z.object({
   body: z.object({
-    estado: z.enum(['ACEPTADO', 'EN_PROGRESO', 'COMPLETADO', 'CANCELADO']),
-    precio: z.number().positive().optional(),
+    precio: z.number().positive('El precio debe ser un número positivo.'),
   }),
 });
 
-export type UpdateEstadoTrabajoInput = z.infer<typeof updateEstadoTrabajoSchema>['body'];
+export type ProponerCotizacionInput = z.infer<typeof proponerCotizacionSchema>['body'];
 
 /**
  * Schema para actualizar trabajo (general)

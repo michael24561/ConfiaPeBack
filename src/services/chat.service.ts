@@ -8,42 +8,57 @@ export class ChatService {
    * Crea o retorna conversación existente entre cliente y técnico
    */
   async createOrGetConversation(userId: string, userRol: Rol, data: CreateConversationInput) {
-    const { tecnicoId } = data;
+    const { tecnicoId, adminId } = data;
 
     // Obtener clienteId del usuario
     const cliente = await this.getUserProfile(userId, userRol);
 
-    // Verificar que el técnico existe
-    const tecnico = await prisma.tecnico.findUnique({
-      where: { id: tecnicoId },
-      select: { id: true, userId: true },
-    });
+    console.log(
+      `[Chat Service] User ${userId} (role: ${userRol}) attempting to create/get conversation with ${
+        tecnicoId ? `tecnico ${tecnicoId}` : ''
+      }${adminId ? `admin ${adminId}` : ''}`
+    );
 
-    if (!tecnico) {
-      throw ApiError.notFound('Técnico no encontrado');
-    }
+    let chatWhereCondition: any;
+    let chatCreateData: any;
+    let includeTarget: any;
 
-    // Buscar conversación existente
-    let chat = await prisma.chat.findUnique({
-      where: {
-        clienteId_tecnicoId: {
-          clienteId: cliente.id,
-          tecnicoId,
-        },
-      },
-      include: {
-        cliente: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                id: true,
-                nombre: true,
-                avatarUrl: true,
-              },
-            },
+    if (tecnicoId) {
+      // VALIDACIÓN: Un cliente solo puede chatear con un técnico si tienen un trabajo en común.
+      if (userRol === Rol.CLIENTE) {
+        const trabajoExistente = await prisma.trabajo.findFirst({
+          where: {
+            clienteId: cliente.id,
+            tecnicoId: tecnicoId,
+            // Opcional: podrías añadir más condiciones, como el estado del trabajo
+            // status: { in: ['ACEPTADO', 'EN_PROGRESO', 'FINALIZADO'] }
           },
-        },
+        });
+
+        if (!trabajoExistente) {
+          console.log(
+            `[Chat Service] DENIED: Client ${cliente.id} has no job with technician ${tecnicoId}.`
+          );
+          throw new ApiError(
+            403,
+            'No puedes iniciar una conversación si no existe un trabajo asignado con este técnico.'
+          );
+        }
+        console.log(
+          `[Chat Service] ALLOWED: Client ${cliente.id} has a job with technician ${tecnicoId}.`
+        );
+      }
+
+      const tecnico = await prisma.tecnico.findUnique({
+        where: { id: tecnicoId },
+        select: { id: true, userId: true, user: { select: { rol: true } } },
+      });
+      if (!tecnico) {
+        throw ApiError.notFound('Técnico no encontrado');
+      }
+      chatWhereCondition = { clienteId: cliente.id, tecnicoId: tecnico.id, adminId: null };
+      chatCreateData = { clienteId: cliente.id, tecnicoId: tecnico.id };
+      includeTarget = {
         tecnico: {
           select: {
             id: true,
@@ -57,16 +72,54 @@ export class ChatService {
             },
           },
         },
+      };
+    } else if (adminId) {
+      const admin = await prisma.user.findUnique({
+        where: { id: adminId, rol: Rol.ADMIN },
+        select: { id: true, rol: true, nombre: true, avatarUrl: true },
+      });
+      if (!admin) {
+        throw ApiError.notFound('Administrador no encontrado');
+      }
+      chatWhereCondition = { clienteId: cliente.id, adminId: admin.id, tecnicoId: null };
+      chatCreateData = { clienteId: cliente.id, adminId: admin.id };
+      includeTarget = {
+        admin: {
+          select: {
+            id: true,
+            nombre: true,
+            avatarUrl: true,
+          },
+        },
+      };
+    } else {
+      throw ApiError.badRequest('Se debe proporcionar un tecnicoId o un adminId');
+    }
+
+    // Buscar conversación existente
+    let chat = await prisma.chat.findFirst({
+      where: chatWhereCondition,
+      include: {
+        cliente: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                id: true,
+                nombre: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        ...includeTarget,
       },
     });
 
     // Si no existe, crear nueva conversación
     if (!chat) {
       chat = await prisma.chat.create({
-        data: {
-          clienteId: cliente.id,
-          tecnicoId,
-        },
+        data: chatCreateData,
         include: {
           cliente: {
             select: {
@@ -80,19 +133,7 @@ export class ChatService {
               },
             },
           },
-          tecnico: {
-            select: {
-              id: true,
-              oficio: true,
-              user: {
-                select: {
-                  id: true,
-                  nombre: true,
-                  avatarUrl: true,
-                },
-              },
-            },
-          },
+          ...includeTarget,
         },
       });
     }
@@ -104,15 +145,23 @@ export class ChatService {
    * Lista todas las conversaciones del usuario (cliente o técnico)
    */
   async getConversations(userId: string, userRol: Rol) {
-    // Obtener el perfil (clienteId o tecnicoId) según el rol
+    // Obtener el perfil (clienteId o tecnicoId/adminId) según el rol
     const profile = await this.getUserProfile(userId, userRol);
 
-    const where = userRol === Rol.CLIENTE
-      ? { clienteId: profile.id }
-      : { tecnicoId: profile.id };
+    let whereClause: any;
+
+    if (userRol === Rol.CLIENTE) {
+      whereClause = { clienteId: profile.id };
+    } else if (userRol === Rol.TECNICO) {
+      whereClause = { tecnicoId: profile.id };
+    } else if (userRol === Rol.ADMIN) {
+      whereClause = { adminId: profile.id };
+    } else {
+      throw ApiError.badRequest('Rol de usuario inválido');
+    }
 
     const chats = await prisma.chat.findMany({
-      where,
+      where: whereClause,
       include: {
         cliente: {
           select: {
@@ -137,6 +186,13 @@ export class ChatService {
                 avatarUrl: true,
               },
             },
+          },
+        },
+        admin: { // Include admin relation
+          select: {
+            id: true,
+            nombre: true,
+            avatarUrl: true,
           },
         },
         mensajes: {
@@ -157,24 +213,48 @@ export class ChatService {
     });
 
     // Formatear respuesta con contador de no leídos
-    return chats.map((chat) => ({
-      id: chat.id,
-      tecnico: {
-        id: chat.tecnico.id,
-        nombre: chat.tecnico.user.nombre,
-        oficio: chat.tecnico.oficio,
-        avatarUrl: chat.tecnico.user.avatarUrl,
-      },
-      cliente: {
-        id: chat.cliente.id,
-        nombre: chat.cliente.user.nombre,
-        avatarUrl: chat.cliente.user.avatarUrl,
-      },
-      ultimoMensaje: chat.ultimoMensaje,
-      ultimoMensajeTimestamp: chat.ultimoMensajeTimestamp,
-      noLeidos: chat.mensajes.length,
-      // online se manejará vía WebSocket
-    }));
+    return chats.map((chat) => {
+      let otherParty: any;
+      if (userRol === Rol.CLIENTE) {
+        // For client, the other party is either a technician or an admin
+        if (chat.tecnico) {
+          otherParty = {
+            id: chat.tecnico.id,
+            nombre: chat.tecnico.user.nombre,
+            oficio: chat.tecnico.oficio,
+            avatarUrl: chat.tecnico.user.avatarUrl,
+            rol: Rol.TECNICO,
+          };
+        } else if (chat.admin) {
+          otherParty = {
+            id: chat.admin.id,
+            nombre: chat.admin.nombre,
+            oficio: null, // Admin doesn't have an oficio
+            avatarUrl: chat.admin.avatarUrl,
+            rol: Rol.ADMIN,
+          };
+        }
+      } else if (userRol === Rol.TECNICO || userRol === Rol.ADMIN) {
+        // For technician or admin, the other party is always the client
+        otherParty = {
+          id: chat.cliente.id,
+          nombre: chat.cliente.user.nombre,
+          avatarUrl: chat.cliente.user.avatarUrl,
+          rol: Rol.CLIENTE,
+        };
+      }
+
+      return {
+        id: chat.id,
+        clienteId: chat.clienteId,
+        tecnicoId: chat.tecnicoId,
+        adminId: chat.adminId,
+        ultimoMensaje: chat.ultimoMensaje,
+        ultimoMensajeTimestamp: chat.ultimoMensajeTimestamp,
+        noLeidos: chat.mensajes.length,
+        otherParty: otherParty,
+      };
+    });
   }
 
   /**
@@ -183,12 +263,20 @@ export class ChatService {
   async getConversation(chatId: string, userId: string, userRol: Rol) {
     const profile = await this.getUserProfile(userId, userRol);
 
-    const where = userRol === Rol.CLIENTE
-      ? { id: chatId, clienteId: profile.id }
-      : { id: chatId, tecnicoId: profile.id };
+    let whereClause: any;
+
+    if (userRol === Rol.CLIENTE) {
+      whereClause = { id: chatId, clienteId: profile.id };
+    } else if (userRol === Rol.TECNICO) {
+      whereClause = { id: chatId, tecnicoId: profile.id };
+    } else if (userRol === Rol.ADMIN) {
+      whereClause = { id: chatId, adminId: profile.id };
+    } else {
+      throw ApiError.badRequest('Rol de usuario inválido');
+    }
 
     const chat = await prisma.chat.findFirst({
-      where,
+      where: whereClause,
       include: {
         cliente: {
           select: {
@@ -213,6 +301,13 @@ export class ChatService {
                 avatarUrl: true,
               },
             },
+          },
+        },
+        admin: { // Include admin relation
+          select: {
+            id: true,
+            nombre: true,
+            avatarUrl: true,
           },
         },
       },
