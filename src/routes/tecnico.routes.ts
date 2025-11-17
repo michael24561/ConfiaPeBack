@@ -43,6 +43,18 @@ router.get(
 );
 
 /**
+ * GET /api/tecnicos/me/ingresos
+ * Obtiene el total de ingresos netos del técnico autenticado
+ * Requiere: Auth + Rol TECNICO
+ */
+router.get(
+  '/me/ingresos',
+  authMiddleware,
+  roleMiddleware(Rol.TECNICO),
+  tecnicoController.getTechnicianIncome.bind(tecnicoController)
+);
+
+/**
  * GET /api/tecnicos/:id
  * Detalle completo de un técnico (público)
  */
@@ -172,10 +184,46 @@ router.patch(
 );
 
 router.patch(
-  '/:id/validar',
+  '/:id/reject-validation',
   authMiddleware,
   roleMiddleware(Rol.ADMIN),
-  tecnicoController.validateTecnico.bind(tecnicoController)
+  tecnicoController.rejectTecnicoValidation.bind(tecnicoController)
+);
+
+/**
+ * GET /api/tecnicos/:id/validation-data
+ * Obtiene los datos del técnico y de RENIEC para la validación
+ * Requiere: Auth + Rol ADMIN
+ */
+router.get(
+  '/:id/validation-data',
+  authMiddleware,
+  roleMiddleware(Rol.ADMIN),
+  tecnicoController.getValidationData.bind(tecnicoController)
+);
+
+/**
+ * PATCH /api/tecnicos/:id/approve-validation
+ * Aprueba la validación de un técnico
+ * Requiere: Auth + Rol ADMIN
+ */
+router.patch(
+  '/:id/approve-validation',
+  authMiddleware,
+  roleMiddleware(Rol.ADMIN),
+  tecnicoController.approveTecnicoValidation.bind(tecnicoController)
+);
+
+/**
+ * PATCH /api/tecnicos/:id/reject-validation
+ * Rechaza la validación de un técnico
+ * Requiere: Auth + Rol ADMIN
+ */
+router.patch(
+  '/:id/reject-validation',
+  authMiddleware,
+  roleMiddleware(Rol.ADMIN),
+  tecnicoController.rejectTecnicoValidation.bind(tecnicoController)
 );
 
 export default router;

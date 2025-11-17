@@ -74,6 +74,20 @@ export class TrabajoController {
     }
   }
 
+  /**
+   * GET /api/admin/trabajos
+   * Lista todos los trabajos para el panel de administración
+   */
+  async getAdminTrabajos(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const filters = req.query as any // TODO: Crear un validador para estos filtros
+      const result = await trabajoService.getAdminTrabajos(filters)
+      successResponse(res, result, 200)
+    } catch (error) {
+      next(error)
+    }
+  }
+
   // =================================================================
   // ACCIONES DEL TÉCNICO
   // =================================================================

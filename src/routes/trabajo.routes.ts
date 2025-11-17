@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { trabajoController } from '../controllers/trabajo.controller'
 import { reporteController } from '../controllers/reporte.controller'
 import { validateMiddleware } from '../middlewares/validation.middleware'
-import { authMiddleware } from '../middlewares/auth.middleware'
+import { authMiddleware, roleMiddleware } from '../middlewares/auth.middleware'
+import { Rol } from '@prisma/client'
 import {
   createTrabajoSchema,
   getTrabajosSchema,
@@ -14,6 +15,17 @@ const router: Router = Router()
 
 // Todas las rutas requieren autenticación
 router.use(authMiddleware)
+
+// =================================================================
+// RUTAS DE ADMINISTRACIÓN
+// =================================================================
+
+// Lista todos los trabajos para el panel de administración
+router.get(
+  '/admin',
+  roleMiddleware(Rol.ADMIN),
+  trabajoController.getAdminTrabajos
+)
 
 // =================================================================
 // RUTAS CORE

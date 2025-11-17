@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
-import { EstadoTrabajo, Rol } from '@prisma/client';
+import { Prisma, EstadoTrabajo, Rol, EstadoReporte } from '@prisma/client'; // Import EstadoReporte from @prisma/client
 import { CreateReporteInput, ResolveReporteInput } from '../validators/reporte.validator';
 
 export class ReporteService {
@@ -52,6 +52,61 @@ export class ReporteService {
     return reporte;
   }
 
+
+  /**
+   * Lista todos los reportes para el panel de administración con filtros y paginación.
+   */
+  async getAdminReportes(filters: { 
+        estado?: EstadoTrabajo | undefined; 
+        tecnicoId?: string | undefined; 
+        clienteId?: string | undefined; 
+        page?: number | undefined; 
+        limit?: number | undefined 
+    }) {
+    const { estado, tecnicoId, clienteId } = filters
+    const page = Number(filters.page || 1)
+    const limit = Number(filters.limit || 10)
+    const skip = (page - 1) * limit
+
+    const where: Prisma.ReporteWhereInput = {
+      trabajo: {}, // Inicializar trabajo como un objeto vacío
+    }
+
+   if (estado) {
+      (where.trabajo as Prisma.TrabajoWhereInput).estado = estado
+    }
+    if (tecnicoId !== undefined) {
+      (where.trabajo as Prisma.TrabajoWhereInput).tecnicoId = tecnicoId
+    }
+    if (clienteId !== undefined) {
+      (where.trabajo as Prisma.TrabajoWhereInput).clienteId = clienteId
+    }
+
+    const [reportes, total] = await Promise.all([
+      prisma.reporte.findMany({
+        where,
+        include: {
+          trabajo: {
+            include: {
+              cliente: { include: { user: { select: { nombre: true, avatarUrl: true } } } },
+              tecnico: { include: { user: { select: { nombre: true, avatarUrl: true } } } },
+            },
+          },
+          reportadoPor: { select: { nombre: true, rol: true } },
+        },
+        orderBy: { fecha: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.reporte.count({ where }),
+    ])
+
+    return {
+      data: reportes,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    }
+  }
+
   /**
    * Obtiene todos los trabajos que están en disputa (para el admin).
    */
@@ -101,12 +156,37 @@ export class ReporteService {
       throw ApiError.badRequest('El trabajo no se encuentra en disputa');
     }
 
-    const updatedTrabajo = await prisma.trabajo.update({
-      where: { id: trabajoId },
-      data: { estado: data.nuevoEstado },
+    const updatedTrabajo = await prisma.$transaction(async (tx) => {
+      const updatedJob = await tx.trabajo.update({
+        where: { id: trabajoId },
+        data: { estado: data.nuevoEstado },
+      });
+
+      let newReporteEstado: EstadoReporte;
+      if (data.nuevoEstado === EstadoTrabajo.COMPLETADO) {
+        newReporteEstado = EstadoReporte.RESUELTO;
+      } else if (data.nuevoEstado === EstadoTrabajo.CANCELADO) {
+        newReporteEstado = EstadoReporte.RECHAZADO; // Or RESUELTO, depending on business logic for cancelled jobs
+      } else {
+        // If the job state is changed to something else, reports might remain EN_REVISION or PENDIENTE
+        // For now, we'll only resolve/reject if job is completed/cancelled
+        newReporteEstado = EstadoReporte.EN_REVISION; // Default or keep current if not explicitly resolved/rejected
+      }
+
+      // Update all reports associated with this job
+      await tx.reporte.updateMany({
+        where: { trabajoId: trabajoId },
+        data: {
+          estado: {
+            set: newReporteEstado,
+          },
+        },
+      });
+
+      return updatedJob;
     });
 
-    // Aquí se podría notificar a ambas partes sobre la resolución.
+    // Aquí se podría agregar una notificación para el admin y la otra parte.
 
     return updatedTrabajo;
   }

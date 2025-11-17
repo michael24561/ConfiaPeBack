@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, EstadoPago } from '@prisma/client';
 import { prisma } from '../config/database';
 import { uploadToCloudinary } from '../config/cloudinary';
 import { ApiError } from '../utils/ApiError';
@@ -11,6 +11,7 @@ import {
   UpdateHorariosInput,
   UpdateConfiguracionInput,
 } from '../validators/tecnico.validator';
+import { payoutService } from './payout.service';
 
 import { reniecService } from './reniec.service';
 
@@ -99,7 +100,13 @@ export class TecnicoService {
           },
           _count: {
             select: {
-              reviews: true,
+              trabajos: {
+                where: {
+                  calificacion: {
+                    isNot: null,
+                  },
+                },
+              },
             },
           },
         },
@@ -145,104 +152,83 @@ export class TecnicoService {
    * Obtiene un técnico por ID con toda su información
    */
   async getTecnicoById(id: string) {
-    const tecnico = await prisma.tecnico.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: {
-            nombre: true,
-            email: true,
-            telefono: true,
-            avatarUrl: true,
-          },
-        },
-        servicios: {
-          select: {
-            id: true,
-            nombre: true,
-            descripcion: true,
-            precio: true,
-          },
-        },
-        horarios: {
-          select: {
-            id: true,
-            diaSemana: true,
-            disponible: true,
-            horaInicio: true,
-            horaFin: true,
-          },
-          orderBy: {
-            diaSemana: 'asc',
-          },
-        },
-        certificados: {
-          select: {
-            id: true,
-            nombre: true,
-            institucion: true,
-            imagenUrl: true,
-            fechaObtencion: true,
-          },
-        },
-        galeria: {
-          select: {
-            id: true,
-            imagenUrl: true,
-            descripcion: true,
-            createdAt: true,
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
-        reviews: {
-          select: {
-            id: true,
-            calificacion: true,
-            comentario: true,
-            respuesta: true,
-            fechaCreacion: true,
-            cliente: {
-              select: {
-                user: {
-                  select: {
-                    nombre: true,
-                    avatarUrl: true,
-                  },
-                },
-              },
-            },
-            trabajo: {
-              select: {
-                servicioNombre: true,
-                precio: true,
-              },
+    const [tecnico, calificacionesCount] = await Promise.all([
+      prisma.tecnico.findUnique({
+        where: { id },
+        include: {
+          user: {
+            select: {
+              nombre: true,
+              email: true,
+              telefono: true,
+              avatarUrl: true,
             },
           },
-          orderBy: {
-            fechaCreacion: 'desc',
+          servicios: {
+            select: {
+              id: true,
+              nombre: true,
+              descripcion: true,
+              precio: true,
+            },
           },
-          take: 20,
-        },
-        _count: {
-          select: {
-            reviews: true,
+          horarios: {
+            select: {
+              id: true,
+              diaSemana: true,
+              disponible: true,
+              horaInicio: true,
+              horaFin: true,
+            },
+            orderBy: {
+              diaSemana: 'asc',
+            },
+          },
+          certificados: {
+            select: {
+              id: true,
+              nombre: true,
+              institucion: true,
+              imagenUrl: true,
+              fechaObtencion: true,
+            },
+          },
+          galeria: {
+            select: {
+              id: true,
+              imagenUrl: true,
+              descripcion: true,
+              createdAt: true,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.calificacion.count({
+        where: {
+          trabajo: {
+            tecnicoId: id,
+          },
+        },
+      }),
+    ]);
 
     if (!tecnico) {
       throw ApiError.notFound('Técnico no encontrado');
     }
 
-    // Calcular estadísticas de reviews
-    const reviewStats = await this.getReviewStats(id);
+    const calificaciones: any[] = [];
+    const reviewStats = this.getReviewStats(calificaciones);
 
     return {
       ...tecnico,
+      calificaciones,
       reviewStats,
+      _count: {
+        calificaciones: calificacionesCount,
+      },
     };
   }
 
@@ -511,44 +497,6 @@ export class TecnicoService {
   /**
    * Valida a un técnico cambiando el estado de `verificado` a `true`
    */
-  async validateTecnico(tecnicoId: string) {
-    const tecnico = await prisma.tecnico.findUnique({
-      where: { id: tecnicoId },
-      include: { user: true },
-    });
-
-    if (!tecnico) {
-      throw ApiError.notFound('Técnico no encontrado');
-    }
-
-    // Llamar al servicio de RENIEC
-    const reniecData = await reniecService.getDniData(tecnico.dni);
-
-    // Comparar datos
-    const nombreCompletoTecnico = `${tecnico.nombres} ${tecnico.apellidos}`.trim().toLowerCase();
-    const nombreCompletoReniec = `${reniecData.nombres} ${reniecData.apellidoPaterno} ${reniecData.apellidoMaterno}`.trim().toLowerCase();
-
-    if (nombreCompletoTecnico !== nombreCompletoReniec) {
-      // Los nombres no coinciden, se puede manejar de diferentes maneras:
-      // 1. Rechazar la validación automáticamente.
-      // 2. Devolver los datos de RENIEC al frontend para que el admin decida.
-      // Por ahora, lanzaremos un error para que el admin lo sepa.
-      throw ApiError.badRequest(`Los datos no coinciden con RENIEC. Nombre registrado: ${nombreCompletoTecnico}, Nombre RENIEC: ${nombreCompletoReniec}`);
-    }
-
-    const updatedTecnico = await prisma.tecnico.update({
-      where: { id: tecnicoId },
-      data: { 
-        verificado: true,
-        // Opcional: Actualizar nombres y apellidos con los de RENIEC
-        nombres: reniecData.nombres,
-        apellidos: `${reniecData.apellidoPaterno} ${reniecData.apellidoMaterno}`.trim(),
-       },
-    });
-
-    return updatedTecnico;
-  }
-
   async getReniecData(tecnicoId: string) {
     const tecnico = await prisma.tecnico.findUnique({
       where: { id: tecnicoId },
@@ -562,15 +510,75 @@ export class TecnicoService {
   }
 
   /**
-   * Obtiene las estadísticas de reviews de un técnico
+   * Actualiza el estado de verificación de un técnico.
    */
-  private async getReviewStats(tecnicoId: string) {
-    const reviews = await prisma.review.findMany({
-      where: { tecnicoId },
-      select: { calificacion: true },
+  async updateVerificationStatus(tecnicoId: string, status: boolean) {
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { id: tecnicoId },
     });
 
-    const total = reviews.length;
+    if (!tecnico) {
+      throw ApiError.notFound('Técnico no encontrado');
+    }
+
+    const updatedTecnico = await prisma.tecnico.update({
+      where: { id: tecnicoId },
+      data: { verificado: status },
+    });
+
+    return updatedTecnico;
+  }
+
+  /**
+   * Obtiene los datos del técnico y de RENIEC para la validación
+   */
+  async getValidationData(tecnicoId: string) {
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { id: tecnicoId },
+      select: {
+        id: true,
+        nombres: true,
+        apellidos: true,
+        dni: true,
+        verificado: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!tecnico) {
+      throw ApiError.notFound('Técnico no encontrado');
+    }
+
+    let reniecData = null;
+    try {
+      reniecData = await reniecService.getDniData(tecnico.dni);
+    } catch (error) {
+      console.warn(`No se pudieron obtener datos de RENIEC para el DNI ${tecnico.dni}:`, error);
+      // No lanzamos error, simplemente devolvemos null para RENIEC
+    }
+
+    return {
+      tecnicoData: {
+        id: tecnico.id,
+        nombres: tecnico.nombres,
+        apellidos: tecnico.apellidos,
+        dni: tecnico.dni,
+        email: tecnico.user.email,
+        verificado: tecnico.verificado,
+      },
+      reniecData,
+    };
+  }
+
+  /**
+   * Obtiene las estadísticas de reviews de un técnico a partir de una lista de calificaciones
+   */
+  private getReviewStats(calificaciones: any[]) {
+    const total = calificaciones.length;
     if (total === 0) {
       return {
         promedio: 0,
@@ -579,9 +587,9 @@ export class TecnicoService {
       };
     }
 
-    const distribucion = reviews.reduce(
-      (acc, review) => {
-        const cal = review.calificacion;
+    const distribucion = calificaciones.reduce(
+      (acc, calificacion) => {
+        const cal = calificacion.puntuacion;
         if (cal >= 1 && cal <= 5 && acc[cal] !== undefined) {
           acc[cal]++;
         }
@@ -590,13 +598,43 @@ export class TecnicoService {
       { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>
     );
 
-    const promedio = reviews.reduce((sum, review) => sum + review.calificacion, 0) / total;
+    const promedio = calificaciones.reduce((sum, calificacion) => sum + calificacion.puntuacion, 0) / total;
 
     return {
       promedio: Math.round(promedio * 10) / 10,
       total,
       distribucion,
     };
+  }
+
+  async getTechnicianNetIncome(userId: string): Promise<number> {
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!tecnico) {
+      throw ApiError.notFound('Perfil de técnico no encontrado.');
+    }
+
+    const pagosRealizados = await prisma.pago.findMany({
+      where: {
+        trabajo: {
+          tecnicoId: tecnico.id,
+        },
+        estado: EstadoPago.PAGADO,
+        payoutRealizado: true,
+      },
+      select: { monto: true },
+    });
+
+    const totalNeto = pagosRealizados.reduce((sum, pago) => {
+      const montoTotal = Number(pago.monto);
+      const montoTecnico = montoTotal * (1 - payoutService.PLATFORM_FEE_PERCENTAGE);
+      return sum + montoTecnico;
+    }, 0);
+
+    return totalNeto;
   }
 }
 

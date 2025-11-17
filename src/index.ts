@@ -4,6 +4,7 @@ import app from './app';
 import { logger } from './config/logger';
 import { prisma } from './config/database';
 import { initializeWebSocket } from './websockets';
+import { setSocketServerInstance } from './websockets/socket';
 
 const PORT = process.env.PORT || 5000;
 
@@ -17,6 +18,9 @@ const io = new Server(httpServer, {
     credentials: true,
   },
 });
+
+// Guardar instancia de Socket.io para uso global
+setSocketServerInstance(io);
 
 // Inicializar WebSocket handlers
 initializeWebSocket(io);

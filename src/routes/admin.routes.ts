@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { adminController } from '../controllers/admin.controller';
 import { reporteController } from '../controllers/reporte.controller';
+import { adminTrabajoController } from '../controllers/admin.trabajo.controller';
+import { payoutController } from '../controllers/payout.controller';
 import { authMiddleware, roleMiddleware } from '../middlewares/auth.middleware';
 import { validateMiddleware } from '../middlewares/validation.middleware';
 import { resolveReporteSchema } from '../validators/reporte.validator';
@@ -11,6 +13,12 @@ const router: Router = Router();
 // Todas las rutas requieren autenticación + rol ADMIN
 router.use(authMiddleware);
 router.use(roleMiddleware(Rol.ADMIN));
+
+/**
+ * POST /api/admin/pagos/:trabajoId/payout
+ * Inicia un payout al técnico para un trabajo completado.
+ */
+router.post('/pagos/:trabajoId/payout', payoutController.createPayout);
 
 /**
  * GET /api/admin/stats
@@ -37,6 +45,12 @@ router.get('/clientes', adminController.getClientes.bind(adminController));
 router.get('/trabajos', adminController.getTrabajos.bind(adminController));
 
 /**
+ * PATCH /api/admin/trabajos/:id/estado
+ * Actualiza el estado de un trabajo (solo admin)
+ */
+router.patch('/trabajos/:id/estado', adminTrabajoController.updateEstado);
+
+/**
  * GET /api/admin/servicios
  * Lista de todos los servicios
  */
@@ -47,10 +61,16 @@ router.get('/servicios', adminController.getServicios.bind(adminController));
 // =================================================================
 
 /**
- * GET /api/admin/reportes
+ * GET /api/admin/reportes/disputa
  * Obtiene una lista de todos los trabajos en disputa.
  */
-router.get('/reportes', reporteController.getAll.bind(reporteController));
+router.get('/reportes/disputa', reporteController.getDisputedTrabajos.bind(reporteController));
+
+/**
+ * GET /api/admin/reportes
+ * Obtiene una lista de todos los reportes con filtros y paginación.
+ */
+router.get('/reportes', reporteController.getAdminReportes.bind(reporteController));
 
 /**
  * POST /api/admin/reportes/:trabajoId/resolver

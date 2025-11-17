@@ -29,6 +29,13 @@ enum EstadoTrabajo {
   EN_DISPUTA
 }
 
+enum EstadoReporte { // Added EstadoReporte enum
+  PENDIENTE
+  EN_REVISION
+  RESUELTO
+  RECHAZADO
+}
+
 enum DiaSemana {
   LUNES
   MARTES
@@ -88,7 +95,6 @@ model Cliente {
   trabajos            Trabajo[]
   chats               Chat[]
   favoritos           Favorito[]
-  reviews             Review[]
   solicitudesServicio SolicitudServicio[]
 
   @@map("clientes")
@@ -114,6 +120,10 @@ model Tecnico {
   verificado Boolean @default(false)
   disponible Boolean @default(true)
 
+  // Stripe Connect
+  stripeAccountId          String?  @unique
+  stripeOnboardingComplete Boolean  @default(false)
+
   // Geolocalización (futuro)
   latitud  Decimal? @db.Decimal(10, 8)
   longitud Decimal? @db.Decimal(11, 8)
@@ -123,7 +133,6 @@ model Tecnico {
   servicios           Servicio[]
   horarios            Horario[]
   trabajos            Trabajo[]
-  reviews             Review[]
   chats               Chat[]
   galeria             GaleriaItem[]
   favoritos           Favorito[]
@@ -232,34 +241,14 @@ model Trabajo {
   fechaCompletado DateTime?
 
   // Relations
-  review         Review?
-  calificaciones Calificacion[]
+  calificacion   Calificacion? // Un trabajo tiene una calificación
   reportes       Reporte[]
+  pago           Pago?
 
   @@index([clienteId, estado])
   @@index([tecnicoId, estado])
   @@index([fechaSolicitud])
   @@map("trabajos")
-}
-
-model Review {
-  id             String   @id @default(uuid())
-  trabajoId      String   @unique
-  trabajo        Trabajo  @relation(fields: [trabajoId], references: [id], onDelete: Cascade)
-  clienteId      String
-  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  tecnicoId      String
-  tecnico        Tecnico  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
-
-  calificacion   Int
-  comentario     String   @db.Text
-  respuesta      String?  @db.Text
-
-  fechaCreacion  DateTime @default(now())
-  fechaRespuesta DateTime?
-
-  @@index([tecnicoId, calificacion])
-  @@map("reviews")
 }
 
 // ====================
@@ -362,10 +351,34 @@ model Reporte {
   trabajo        Trabajo  @relation(fields: [trabajoId], references: [id], onDelete: Cascade)
   reportadoPorId String
   reportadoPor   User     @relation("Reportes", fields: [reportadoPorId], references: [id], onDelete: Cascade)
+  estado         EstadoReporte @default(PENDIENTE) // Added estado field
 
   @@index([trabajoId])
   @@index([reportadoPorId])
   @@map("reportes")
+}
+
+enum EstadoPago {
+  PENDIENTE
+  PAGADO
+  FALLIDO
+}
+
+model Pago {
+  id              String     @id @default(uuid())
+  trabajoId       String     @unique
+  trabajo         Trabajo    @relation(fields: [trabajoId], references: [id])
+  monto           Decimal    @db.Decimal(10, 2)
+  estado          EstadoPago @default(PENDIENTE)
+  stripeSessionId String?    @unique
+  fechaCreacion   DateTime   @default(now())
+  fechaPago       DateTime?
+  payoutRealizado Boolean    @default(false)
+  fechaPayout     DateTime?
+  stripeTransferId String?
+
+  @@index([trabajoId])
+  @@map("pagos")
 }
 
 // ====================
@@ -449,7 +462,7 @@ model SolicitudServicio {
 
 model Calificacion {
   id         String   @id @default(uuid())
-  trabajoId  String
+  trabajoId  String   @unique
   trabajo    Trabajo  @relation(fields: [trabajoId], references: [id], onDelete: Cascade)
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

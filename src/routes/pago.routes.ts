@@ -1,18 +1,19 @@
-import { Router } from 'express';
-import {
-  createPaymentIntent,
-  confirmarPago,
-  webhookHandler
-} from '../controllers/pago.controller';
-import { validarJWT } from '../middlewares/auth.middleware';
+import { Router } from 'express'
+import { pagoController } from '../controllers/pago.controller'
+import { validateMiddleware } from '../middlewares/validation.middleware'
+import { authMiddleware } from '../middlewares/auth.middleware'
+import { createCheckoutSessionSchema } from '../validators/pago.validator'
 
-const router: Router = Router();
+const router: Router = Router()
 
-// Rutas protegidas por JWT
-router.post('/intent', validarJWT, createPaymentIntent);
-router.post('/confirmar', validarJWT, confirmarPago);
+// Todas las rutas en este archivo requieren autenticación y un body parseado
+router.use(authMiddleware)
 
-// Webhook (no requiere JWT)
-router.post('/webhook', webhookHandler);
+// Crea una sesión de checkout (CLIENTE)
+router.post(
+  '/create-checkout-session',
+  validateMiddleware(createCheckoutSessionSchema),
+  pagoController.createCheckoutSession
+)
 
-export default router;
+export default router

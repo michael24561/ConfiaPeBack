@@ -1,29 +1,28 @@
 import { prisma } from '../config/database';
-import { EstadoTrabajo } from '@prisma/client';
+import { EstadoPago } from '@prisma/client';
+import { payoutService } from './payout.service';
 
 export class AdminService {
   async getStats() {
-    const [tecnicos, clientes, trabajos, servicios, trabajosCompletados] = await Promise.all([
+    const [tecnicos, clientes, trabajos, pagosCompletados] = await Promise.all([
       prisma.tecnico.count(),
       prisma.cliente.count(),
       prisma.trabajo.count(),
-      prisma.servicio.count(),
-      prisma.trabajo.findMany({
+      prisma.pago.findMany({
         where: {
-          estado: EstadoTrabajo.COMPLETADO,
-          precio: { not: null },
+          estado: EstadoPago.PAGADO,
         },
-        select: { precio: true },
+        select: { monto: true },
       }),
     ]);
 
-    const ingresosBrutosTotales = trabajosCompletados.reduce(
-      (sum, job) => sum + Number(job.precio || 0),
+    const ingresosBrutosTotales = pagosCompletados.reduce(
+      (sum, pago) => sum + Number(pago.monto || 0),
       0
     );
-    const ingresosPlataforma = ingresosBrutosTotales * 0.05;
+    const ingresosPlataforma = ingresosBrutosTotales * payoutService.PLATFORM_FEE_PERCENTAGE;
 
-    return { tecnicos, clientes, trabajos, servicios, ingresosPlataforma };
+    return { tecnicos, clientes, trabajos, ingresosPlataforma };
   }
 
   async getTecnicos() {

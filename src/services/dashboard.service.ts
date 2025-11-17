@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
 import { EstadoTrabajo } from '@prisma/client';
@@ -27,9 +28,9 @@ export class DashboardService {
       prisma.trabajo.count({
         where: { tecnicoId: tecnico.id },
       }),
-      // Total de reviews
-      prisma.review.count({
-        where: { tecnicoId: tecnico.id },
+      // Total de calificaciones
+      prisma.calificacion.count({
+        where: { trabajo: { tecnicoId: tecnico.id } },
       }),
       // Trabajos por estado
       prisma.trabajo.groupBy({
@@ -51,6 +52,11 @@ export class DashboardService {
               },
             },
           },
+          calificacion: {
+            select: {
+              puntuacion: true,
+            },
+          },
         },
         orderBy: { fechaSolicitud: 'desc' },
         take: 5,
@@ -68,7 +74,7 @@ export class DashboardService {
 
     // Calcular ingresos netos (95% del total)
     const ingresosBrutos = trabajosCompletadosParaIngresos.reduce(
-      (sum, job) => sum + Number(job.precio || 0),
+      (sum: number, job: { precio: Prisma.Decimal | null }) => sum + Number(job.precio || 0),
       0
     );
     const ingresosNetos = ingresosBrutos * 0.95;
@@ -86,7 +92,7 @@ export class DashboardService {
       EN_DISPUTA: 0,
     };
 
-    trabajosPorEstado.forEach((item) => {
+    trabajosPorEstado.forEach((item: { estado: EstadoTrabajo; _count: number }) => {
       if (item.estado in estadosCounts) {
         estadosCounts[item.estado] = item._count;
       }
@@ -112,7 +118,7 @@ export class DashboardService {
             : 0,
       },
       reviews: {
-        total: reviewsCount,
+        total: reviewsCount, // Ahora es calificacionesCount
         calificacionPromedio: Number(tecnico.calificacionPromedio || 0),
       },
       ultimosTrabajos,
@@ -235,9 +241,9 @@ export class DashboardService {
             },
           },
         },
-        review: {
+        calificacion: {
           select: {
-            calificacion: true,
+            puntuacion: true,
           },
         },
       },
@@ -250,7 +256,15 @@ export class DashboardService {
     const clientesMap = new Map<
       string,
       {
-        cliente: any;
+        cliente: {
+          id: string;
+          user: {
+            nombre: string;
+            email: string;
+            telefono: string | null;
+            avatarUrl: string | null;
+          };
+        };
         trabajosTotal: number;
         trabajosCompletados: number;
         ingresoTotal: number;
@@ -290,19 +304,21 @@ export class DashboardService {
     const clientesArray = Array.from(clientesMap.values());
 
     for (const clienteData of clientesArray) {
-      const reviews = await prisma.review.findMany({
+      const calificaciones = await prisma.calificacion.findMany({
         where: {
-          clienteId: clienteData.cliente.id,
-          tecnicoId: tecnico.id,
+          trabajo: {
+            clienteId: clienteData.cliente.id,
+            tecnicoId: tecnico.id,
+          },
         },
         select: {
-          calificacion: true,
+          puntuacion: true,
         },
       });
 
-      if (reviews.length > 0) {
+      if (calificaciones.length > 0) {
         clienteData.calificacionPromedio =
-          reviews.reduce((sum, r) => sum + r.calificacion, 0) / reviews.length;
+          calificaciones.reduce((sum, r) => sum + r.puntuacion, 0) / calificaciones.length;
       }
     }
 
@@ -336,7 +352,7 @@ export class DashboardService {
       throw ApiError.notFound('Perfil de técnico no encontrado');
     }
 
-    const [trabajos, reviews] = await Promise.all([
+    const [trabajos, calificaciones] = await Promise.all([
       prisma.trabajo.findMany({
         where: {
           tecnicoId: tecnico.id,
@@ -347,10 +363,10 @@ export class DashboardService {
           fechaCompletado: true,
         },
       }),
-      prisma.review.findMany({
-        where: { tecnicoId: tecnico.id },
+      prisma.calificacion.findMany({
+        where: { trabajo: { tecnicoId: tecnico.id } },
         select: {
-          calificacion: true,
+          puntuacion: true,
           fechaCreacion: true,
         },
       }),
@@ -367,14 +383,14 @@ export class DashboardService {
 
     const tiempoPromedioHoras =
       tiemposCompletado.length > 0
-        ? tiemposCompletado.reduce((sum, t) => sum + t, 0) / tiemposCompletado.length
+        ? tiemposCompletado.reduce((sum: number, t: number) => sum + t, 0) / tiemposCompletado.length
         : 0;
 
     // Evolución de calificaciones (últimos 6 meses)
     const seisMesesAtras = new Date();
     seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
 
-    const reviewsRecientes = reviews.filter((r) => r.fechaCreacion >= seisMesesAtras);
+    const calificacionesRecientes = calificaciones.filter((r) => r.fechaCreacion >= seisMesesAtras);
 
     return {
       trabajosCompletados: trabajos.length,
@@ -384,8 +400,8 @@ export class DashboardService {
       },
       calificaciones: {
         promedio: Number(tecnico.calificacionPromedio || 0),
-        total: reviews.length,
-        ultimos6Meses: reviewsRecientes.length,
+        total: calificaciones.length,
+        ultimos6Meses: calificacionesRecientes.length,
       },
       tasaCompletado: await this.calcularTasaCompletado(tecnico.id),
     };

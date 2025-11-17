@@ -1,100 +1,102 @@
-import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Request, Response, NextFunction } from 'express'
+import { calificacionService } from '../services/calificacion.service'
+import { successResponse, paginatedResponse } from '../utils/response' // Added paginatedResponse
+import { ApiError } from '../utils/ApiError'
 
-const prisma = new PrismaClient();
-
-export const crearCalificacion = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { trabajoId, puntuacion, comentario, fotos = [], esPublico = true } = req.body;
-
-    // Validaciones
-    if (![1, 2, 3, 4, 5].includes(puntuacion)) {
-      res.status(400).json({ error: 'Puntuación inválida' });
-      return;
-    }
-
-    if (!req.user) {
-      res.status(401).json({ error: 'No autenticado' });
-      return;
-    }
-
-    const calificacion = await prisma.calificacion.create({
-      data: {
-        trabajoId,
-        puntuacion,
-        comentario,
-        fotos: JSON.stringify(fotos),
-        esPublico,
-        userId: req.user.id
+export class CalificacionController {
+  async crearCalificacion(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'No autenticado')
       }
-    });
-
-    // Actualizar rating del técnico
-    await actualizarRatingTecnico(trabajoId);
-
-    res.json(calificacion);
-  } catch (error) {
-    console.error('Error en crearCalificacion:', error);
-    res.status(500).json({ error: 'Error al guardar calificación' });
+      const calificacion = await calificacionService.crearCalificacion(req.user.id, req.body)
+      successResponse(res, calificacion, 201)
+    } catch (error) {
+      next(error)
+    }
   }
-};
 
-async function actualizarRatingTecnico(trabajoId: string) {
-  const trabajo = await prisma.trabajo.findUnique({
-    where: { id: trabajoId },
-    include: { tecnico: true }
-  });
+  async obtenerCalificaciones(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { tecnicoId } = req.params
+      const { page, limit, calificacion } = req.query
 
-  if (!trabajo || !trabajo.tecnicoId) return;
-
-  const avgRating = await prisma.calificacion.aggregate({
-    _avg: { puntuacion: true },
-    where: {
-      trabajo: {
-        is: {
-          tecnicoId: trabajo.tecnicoId
-        }
+      if (!tecnicoId) {
+        throw new ApiError(400, 'ID de técnico requerido')
       }
-    }
-  });
+      
+      const filters: { page?: number, limit?: number, calificacion?: string } = {};
+      if (page) filters.page = parseInt(page as string);
+      if (limit) filters.limit = parseInt(limit as string);
+      if (calificacion) filters.calificacion = calificacion as string;
 
-  await prisma.tecnico.update({
-    where: { id: trabajo.tecnicoId },
-    data: { calificacionPromedio: avgRating._avg.puntuacion || 0 }
-  });
+      const result = await calificacionService.obtenerCalificacionesPorTecnico(tecnicoId, filters)
+      paginatedResponse(res, result.data, result.pagination)
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  async getAdminCalificaciones(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { page, limit, tecnicoId, clienteId } = req.query;
+      const filters: { page?: number, limit?: number, tecnicoId?: string, clienteId?: string } = {};
+      if (page) filters.page = parseInt(page as string);
+      if (limit) filters.limit = parseInt(limit as string);
+      if (tecnicoId) filters.tecnicoId = tecnicoId as string;
+      if (clienteId) filters.clienteId = clienteId as string;
+
+      const result = await calificacionService.getAdminCalificaciones(filters);
+      paginatedResponse(res, result.data, result.pagination);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteCalificacion(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        throw new ApiError(400, 'ID de calificación requerido');
+      }
+      const result = await calificacionService.deleteCalificacion(id);
+      successResponse(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateOwnCalificacion(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'No autenticado');
+      }
+      const { id } = req.params;
+      if (!id) {
+        throw new ApiError(400, 'ID de calificación requerido');
+      }
+      const result = await calificacionService.updateOwnCalificacion(req.user.id, id, req.body);
+      successResponse(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteOwnCalificacion(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'No autenticado');
+      }
+      const { id } = req.params;
+      if (!id) {
+        throw new ApiError(400, 'ID de calificación requerido');
+      }
+      const result = await calificacionService.deleteOwnCalificacion(req.user.id, id);
+      successResponse(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
-export const obtenerCalificaciones = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { tecnicoId } = req.params;
-
-    if (!tecnicoId) {
-      res.status(400).json({ error: 'ID de técnico requerido' });
-      return;
-    }
-
-    const calificaciones = await prisma.calificacion.findMany({
-      where: {
-        trabajo: {
-          is: {
-            tecnicoId: tecnicoId
-          }
-        },
-        esPublico: true
-      },
-      include: {
-        user: {
-          select: { nombre: true, avatarUrl: true }
-        }
-      }
-    });
-
-    res.json(calificaciones.map(c => ({
-      ...c,
-      fotos: JSON.parse(c.fotos)
-    })));
-  } catch (error) {
-    console.error('Error en obtenerCalificaciones:', error);
-    res.status(500).json({ error: 'Error al obtener calificaciones' });
-  }
-};
+export const calificacionController = new CalificacionController()

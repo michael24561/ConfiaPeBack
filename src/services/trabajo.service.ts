@@ -6,6 +6,7 @@ import {
   GetTrabajosInput,
   ProponerCotizacionInput,
 } from '../validators/trabajo.validator'
+import { sendEventToUser } from '../websockets/notification.emitter'
 
 export class TrabajoService {
   // =================================================================
@@ -44,7 +45,7 @@ export class TrabajoService {
         },
       })
 
-      await tx.notificacion.create({
+      const notificacion = await tx.notificacion.create({
         data: {
           userId: tecnico.userId,
           tipo: TipoNotificacion.NUEVO_TRABAJO,
@@ -53,6 +54,8 @@ export class TrabajoService {
           metadata: { trabajoId: nuevoTrabajo.id },
         },
       })
+
+      sendEventToUser(notificacion.userId, 'new_notification', notificacion);
 
       return nuevoTrabajo
     })
@@ -77,7 +80,7 @@ export class TrabajoService {
         include: {
           cliente: { include: { user: { select: { nombre: true, avatarUrl: true } } } },
           tecnico: { include: { user: { select: { nombre: true, avatarUrl: true } } } },
-          review: { select: { id: true, calificacion: true } },
+          calificacion: { select: { id: true, puntuacion: true, comentario: true } },
         },
         orderBy: { fechaSolicitud: 'desc' },
         skip,
@@ -96,8 +99,44 @@ export class TrabajoService {
    * Obtiene un trabajo por ID, validando que el usuario sea participante.
    */
   async getTrabajoById(trabajoId: string, userId: string, userRol: Rol) {
-    const trabajo = await this._getTrabajoAndValidateOwner(trabajoId, userId, userRol)
+    const trabajo = await this._getTrabajoAndValidateOwner(trabajoId, userId, userRol, true) // Pass true to include pago
     return trabajo
+  }
+
+  /**
+   * Lista todos los trabajos para el panel de administración con filtros y paginación.
+   */
+  async getAdminTrabajos(filters: { estado?: EstadoTrabajo; tecnicoId?: string; clienteId?: string; page?: number; limit?: number }) {
+    const page = filters.page ? Number(filters.page) : 1;
+    const limit = filters.limit ? Number(filters.limit) : 10;
+    const { estado, tecnicoId, clienteId } = filters
+    const skip = (page - 1) * limit
+
+    const where: Prisma.TrabajoWhereInput = {
+      ...(estado && { estado }),
+      ...(tecnicoId && { tecnicoId }),
+      ...(clienteId && { clienteId }),
+    }
+
+    const [trabajos, total] = await Promise.all([
+      prisma.trabajo.findMany({
+        where,
+        include: {
+          cliente: { include: { user: { select: { nombre: true, avatarUrl: true } } } },
+          tecnico: { include: { user: { select: { nombre: true, avatarUrl: true } } } },
+          calificacion: { select: { id: true, puntuacion: true } },
+        },
+        orderBy: { fechaSolicitud: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.trabajo.count({ where }),
+    ])
+
+    return {
+      data: trabajos,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    }
   }
 
   // =================================================================
@@ -120,7 +159,8 @@ export class TrabajoService {
       'NECESITA_VISITA',
       trabajo.cliente.userId,
       'Visita requerida',
-      `${trabajo.tecnico.user.nombre} necesita una visita para cotizar tu trabajo.`
+      `${trabajo.tecnico.user.nombre} necesita una visita para cotizar tu trabajo.`,
+      TipoNotificacion.SISTEMA
     )
   }
 
@@ -141,6 +181,7 @@ export class TrabajoService {
       trabajo.cliente.userId,
       'Tienes una nueva cotización',
       `${trabajo.tecnico.user.nombre} ha cotizado tu trabajo en S/ ${data.precio.toFixed(2)}.`,
+      TipoNotificacion.SISTEMA,
       { precio: data.precio }
     )
   }
@@ -161,7 +202,8 @@ export class TrabajoService {
       'RECHAZADO',
       trabajo.cliente.userId,
       'Solicitud rechazada',
-      `${trabajo.tecnico.user.nombre} no está disponible para tu solicitud.`
+      `${trabajo.tecnico.user.nombre} no está disponible para tu solicitud.`,
+      TipoNotificacion.SISTEMA
     )
   }
 
@@ -181,7 +223,8 @@ export class TrabajoService {
       'EN_PROGRESO',
       trabajo.cliente.userId,
       'Trabajo en progreso',
-      `${trabajo.tecnico.user.nombre} ha comenzado a trabajar en tu solicitud.`
+      `${trabajo.tecnico.user.nombre} ha comenzado a trabajar en tu solicitud.`,
+      TipoNotificacion.SISTEMA
     )
   }
 
@@ -203,6 +246,7 @@ export class TrabajoService {
         trabajo.cliente.userId,
         '¡Trabajo completado!',
         `${trabajo.tecnico.user.nombre} ha finalizado el trabajo. ¡No olvides calificarlo!`,
+        TipoNotificacion.SISTEMA,
         { fechaCompletado: new Date() },
         tx
       )
@@ -238,7 +282,8 @@ export class TrabajoService {
       'ACEPTADO',
       trabajo.tecnico.userId,
       '¡Cotización aceptada!',
-      `${trabajo.cliente.user.nombre} ha aceptado tu cotización de S/ ${trabajo.precio?.toFixed(2)}.`
+      `${trabajo.cliente.user.nombre} ha aceptado tu cotización de S/ ${trabajo.precio?.toFixed(2)}.`,
+      TipoNotificacion.PAGO
     )
   }
 
@@ -258,7 +303,8 @@ export class TrabajoService {
       'RECHAZADO',
       trabajo.tecnico.userId,
       'Cotización rechazada',
-      `${trabajo.cliente.user.nombre} ha rechazado tu cotización.`
+      `${trabajo.cliente.user.nombre} ha rechazado tu cotización.`,
+      TipoNotificacion.SISTEMA
     )
   }
 
@@ -281,7 +327,8 @@ export class TrabajoService {
       'CANCELADO',
       recipientUserId,
       'Trabajo cancelado',
-      `${senderName} ha cancelado el trabajo: ${trabajo.servicioNombre}.`
+      `${senderName} ha cancelado el trabajo: ${trabajo.servicioNombre}.`,
+      TipoNotificacion.SISTEMA
     )
   }
 
@@ -292,12 +339,13 @@ export class TrabajoService {
   /**
    * Método privado para obtener un trabajo y validar la propiedad.
    */
-  private async _getTrabajoAndValidateOwner(trabajoId: string, userId: string, userRol: Rol) {
+  private async _getTrabajoAndValidateOwner(trabajoId: string, userId: string, userRol: Rol, includePago: boolean = false) {
     const trabajo = await prisma.trabajo.findUnique({
       where: { id: trabajoId },
       include: {
         cliente: { include: { user: true } },
         tecnico: { include: { user: true } },
+        ...(includePago && { pago: true }),
       },
     })
 
@@ -325,10 +373,11 @@ export class TrabajoService {
     notificacionUserId: string,
     notificacionTitulo: string,
     notificacionMensaje: string,
+    notificacionTipo: TipoNotificacion,
     extraData: Prisma.TrabajoUpdateInput = {},
     tx?: Prisma.TransactionClient
   ) {
-    const prismaClient = tx || prisma
+    const prismaClient = tx || prisma;
 
     const trabajoActualizado = await prismaClient.trabajo.update({
       where: { id: trabajo.id },
@@ -336,12 +385,12 @@ export class TrabajoService {
         estado: nuevoEstado,
         ...extraData,
       },
-    })
+    });
 
-    await prismaClient.notificacion.create({
+    const notificacion = await prismaClient.notificacion.create({
       data: {
         userId: notificacionUserId,
-        tipo: TipoNotificacion.NUEVO_TRABAJO,
+        tipo: notificacionTipo,
         titulo: notificacionTitulo,
         mensaje: notificacionMensaje,
         metadata: {
@@ -349,7 +398,14 @@ export class TrabajoService {
           nuevoEstado,
         },
       },
-    })
+    });
+
+    // Enviar notificación por WebSocket
+    sendEventToUser(notificacion.userId, 'new_notification', notificacion);
+
+    // Emitir evento de actualización de estado del trabajo a ambos usuarios
+    sendEventToUser(trabajo.cliente.userId, 'trabajo:estado_actualizado', trabajoActualizado);
+    sendEventToUser(trabajo.tecnico.userId, 'trabajo:estado_actualizado', trabajoActualizado);
 
     return trabajoActualizado
   }

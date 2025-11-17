@@ -225,16 +225,34 @@ export class TecnicoController {
   }
 
   /**
-   * PATCH /api/tecnicos/:id/validar
-   * Valida a un técnico
+   * PATCH /api/tecnicos/:id/approve-validation
+   * Aprueba la validación de un técnico
    */
-  async validateTecnico(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async approveTecnicoValidation(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
       if (!id) {
         throw ApiError.badRequest('ID de técnico requerido');
       }
-      const result = await tecnicoService.validateTecnico(id);
+      const result = await tecnicoService.updateVerificationStatus(id, true);
+
+      successResponse(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/tecnicos/:id/reject-validation
+   * Rechaza la validación de un técnico
+   */
+  async rejectTecnicoValidation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        throw ApiError.badRequest('ID de técnico requerido');
+      }
+      const result = await tecnicoService.updateVerificationStatus(id, false);
 
       successResponse(res, result, 200);
     } catch (error) {
@@ -251,6 +269,40 @@ export class TecnicoController {
       const result = await tecnicoService.getReniecData(id);
 
       successResponse(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/tecnicos/:id/validation-data
+   * Obtiene los datos del técnico y de RENIEC para la validación
+   */
+  async getValidationData(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        throw ApiError.badRequest('ID de técnico requerido');
+      }
+      const result = await tecnicoService.getValidationData(id);
+
+      successResponse(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/tecnicos/me/ingresos
+   * Obtiene el total de ingresos netos del técnico autenticado.
+   */
+  async getTechnicianIncome(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw ApiError.unauthorized('Usuario no autenticado');
+      }
+      const result = await tecnicoService.getTechnicianNetIncome(req.user.id);
+      successResponse(res, { totalNetIncome: result }, 200);
     } catch (error) {
       next(error);
     }
