@@ -54,6 +54,16 @@ enum TipoNotificacion {
   SISTEMA
 }
 
+enum EstadoPago {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  CANCELADO
+  REEMBOLSADO
+  EN_PROCESO
+  FALLIDO
+}
+
 // ====================
 // ENTIDADES CORE
 // ====================
@@ -76,10 +86,10 @@ model User {
   tecnico        Tecnico?
   mensajes       Mensaje[]
   notificaciones Notificacion[]
-  transacciones  Transaccion[]
   calificaciones Calificacion[]
-  adminChats     Chat[] @relation("AdminChat") // Add this line
+  adminChats     Chat[] @relation("AdminChat")
   reportes       Reporte[] @relation("Reportes")
+  pagos          Pago[]
 
   @@index([email])
   @@map("users")
@@ -120,10 +130,6 @@ model Tecnico {
   verificado Boolean @default(false)
   disponible Boolean @default(true)
 
-  // Stripe Connect
-  stripeAccountId          String?  @unique
-  stripeOnboardingComplete Boolean  @default(false)
-
   // Geolocalización (futuro)
   latitud  Decimal? @db.Decimal(10, 8)
   longitud Decimal? @db.Decimal(11, 8)
@@ -137,8 +143,9 @@ model Tecnico {
   galeria             GaleriaItem[]
   favoritos           Favorito[]
   configuracion       ConfiguracionTecnico?
-  transacciones       Transaccion[]
   solicitudesServicio SolicitudServicio[]
+  pagos               Pago[]                @relation("TechnicianPayments")
+
 
   @@index([oficio])
   @@index([calificacionPromedio])
@@ -234,7 +241,7 @@ model Trabajo {
   direccion       String
   telefono        String
   estado          EstadoTrabajo @default(PENDIENTE)
-  precio          Decimal?      @db.Decimal(10, 2)
+  precio          Float?
 
   fechaSolicitud  DateTime      @default(now())
   fechaProgramada DateTime?
@@ -358,69 +365,34 @@ model Reporte {
   @@map("reportes")
 }
 
-enum EstadoPago {
-  PENDIENTE
-  PAGADO
-  FALLIDO
-}
-
 model Pago {
-  id              String     @id @default(uuid())
-  trabajoId       String     @unique
-  trabajo         Trabajo    @relation(fields: [trabajoId], references: [id])
-  monto           Decimal    @db.Decimal(10, 2)
-  estado          EstadoPago @default(PENDIENTE)
-  stripeSessionId String?    @unique
-  fechaCreacion   DateTime   @default(now())
-  fechaPago       DateTime?
-  payoutRealizado Boolean    @default(false)
-  fechaPayout     DateTime?
-  stripeTransferId String?
+  id                 String     @id @default(uuid())
+  trabajoId          String     @unique
+  trabajo            Trabajo    @relation(fields: [trabajoId], references: [id])
+  clienteId          String
+  cliente            User       @relation(fields: [clienteId], references: [id])
+  tecnicoId          String
+  tecnico            Tecnico    @relation("TechnicianPayments", fields: [tecnicoId], references: [id])
+
+  // Mercado Pago
+  mpPaymentId        String?    @unique
+  mpStatus           EstadoPago @default(PENDIENTE)
+  mpStatusDetail     String?
+
+  montoTotal         Float
+  comisionPlataforma Float
+  montoTecnico       Float
+
+  moneda             String     @default("PEN")
+  metodoPago         String?
+  cuotas             Int        @default(1)
+
+  fechaPago          DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   @@index([trabajoId])
   @@map("pagos")
-}
-
-// ====================
-// PAGOS Y TRANSACCIONES
-// ====================
-
-enum EstadoTransaccion {
-  PENDIENTE
-  COMPLETADO
-  FALLIDO
-  CANCELADO
-}
-
-enum MetodoPago {
-  STRIPE
-  YAPE
-}
-
-model Transaccion {
-  id             String             @id @default(uuid())
-  userId         String
-  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tecnicoId      String
-  tecnico        Tecnico            @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
-  servicioId     String?
-
-  monto          Decimal            @db.Decimal(10, 2)
-  estado         EstadoTransaccion  @default(PENDIENTE)
-  metodo         MetodoPago
-
-  // Stripe/Yape
-  paymentIntentId String? @unique
-  paymentLinkId   String? @unique
-  paymentLinkUrl  String?
-
-  fechaCreacion   DateTime @default(now())
-  fechaCompletado DateTime?
-
-  @@index([userId])
-  @@index([tecnicoId])
-  @@index([estado])
-  @@map("transacciones")
 }
 
 // ====================

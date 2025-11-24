@@ -11,7 +11,6 @@ import {
   UpdateHorariosInput,
   UpdateConfiguracionInput,
 } from '../validators/tecnico.validator';
-import { payoutService } from './payout.service';
 
 import { reniecService } from './reniec.service';
 
@@ -619,19 +618,14 @@ export class TecnicoService {
 
     const pagosRealizados = await prisma.pago.findMany({
       where: {
-        trabajo: {
-          tecnicoId: tecnico.id,
-        },
-        estado: EstadoPago.PAGADO,
-        payoutRealizado: true,
+        tecnicoId: tecnico.id,
+        mpStatus: EstadoPago.APROBADO,
       },
-      select: { monto: true },
+      select: { montoTecnico: true },
     });
 
     const totalNeto = pagosRealizados.reduce((sum, pago) => {
-      const montoTotal = Number(pago.monto);
-      const montoTecnico = montoTotal * (1 - payoutService.PLATFORM_FEE_PERCENTAGE);
-      return sum + montoTecnico;
+      return sum + pago.montoTecnico;
     }, 0);
 
     return totalNeto;

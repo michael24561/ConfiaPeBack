@@ -1,4 +1,5 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
+import { Rol } from '@prisma/client';
 
 export const jwtConfig = {
   access: {
@@ -14,7 +15,7 @@ export const jwtConfig = {
 export interface JWTPayload {
   id: string;
   email: string;
-  rol: string;
+  rol: Rol;
 }
 
 export const generateTokens = (payload: JWTPayload) => {

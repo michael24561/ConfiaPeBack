@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { adminController } from '../controllers/admin.controller';
 import { reporteController } from '../controllers/reporte.controller';
 import { adminTrabajoController } from '../controllers/admin.trabajo.controller';
-import { payoutController } from '../controllers/payout.controller';
 import { authMiddleware, roleMiddleware } from '../middlewares/auth.middleware';
 import { validateMiddleware } from '../middlewares/validation.middleware';
 import { resolveReporteSchema } from '../validators/reporte.validator';
@@ -13,12 +12,6 @@ const router: Router = Router();
 // Todas las rutas requieren autenticación + rol ADMIN
 router.use(authMiddleware);
 router.use(roleMiddleware(Rol.ADMIN));
-
-/**
- * POST /api/admin/pagos/:trabajoId/payout
- * Inicia un payout al técnico para un trabajo completado.
- */
-router.post('/pagos/:trabajoId/payout', payoutController.createPayout);
 
 /**
  * GET /api/admin/stats

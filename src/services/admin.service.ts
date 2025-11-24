@@ -1,6 +1,5 @@
 import { prisma } from '../config/database';
 import { EstadoPago } from '@prisma/client';
-import { payoutService } from './payout.service';
 
 export class AdminService {
   async getStats() {
@@ -10,17 +9,17 @@ export class AdminService {
       prisma.trabajo.count(),
       prisma.pago.findMany({
         where: {
-          estado: EstadoPago.PAGADO,
+          mpStatus: EstadoPago.APROBADO,
         },
-        select: { monto: true },
+        select: { montoTotal: true },
       }),
     ]);
 
     const ingresosBrutosTotales = pagosCompletados.reduce(
-      (sum, pago) => sum + Number(pago.monto || 0),
+      (sum, pago) => sum + Number(pago.montoTotal || 0),
       0
     );
-    const ingresosPlataforma = ingresosBrutosTotales * payoutService.PLATFORM_FEE_PERCENTAGE;
+    const ingresosPlataforma = ingresosBrutosTotales;
 
     return { tecnicos, clientes, trabajos, ingresosPlataforma };
   }

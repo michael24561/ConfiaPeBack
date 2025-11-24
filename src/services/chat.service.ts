@@ -8,111 +8,68 @@ export class ChatService {
    * Crea o retorna conversación existente entre cliente y técnico
    */
   async createOrGetConversation(userId: string, userRol: Rol, data: CreateConversationInput) {
-    const { tecnicoId, adminId } = data;
-
-    // Obtener clienteId del usuario
-    const cliente = await this.getUserProfile(userId, userRol);
-
-    console.log(
-      `[Chat Service] User ${userId} (role: ${userRol}) attempting to create/get conversation with ${
-        tecnicoId ? `tecnico ${tecnicoId}` : ''
-      }${adminId ? `admin ${adminId}` : ''}`
-    );
+    const { tecnicoId, adminId, clienteId } = data;
 
     let chatWhereCondition: any;
     let chatCreateData: any;
     let includeTarget: any;
 
-    if (tecnicoId) {
-      // VALIDACIÓN: Un cliente solo puede chatear con un técnico si tienen un trabajo en común.
-      if (userRol === Rol.CLIENTE) {
+    if (userRol === Rol.CLIENTE) {
+      const cliente = await this.getUserProfile(userId, Rol.CLIENTE);
+      
+      if (tecnicoId) {
+        const tecnico = await prisma.tecnico.findUnique({ where: { id: tecnicoId } });
+        if (!tecnico) throw ApiError.notFound('Técnico no encontrado');
+        
+        // VALIDACIÓN: Cliente solo puede chatear con técnico si hay trabajo en común.
         const trabajoExistente = await prisma.trabajo.findFirst({
-          where: {
-            clienteId: cliente.id,
-            tecnicoId: tecnicoId,
-            // Opcional: podrías añadir más condiciones, como el estado del trabajo
-            // status: { in: ['ACEPTADO', 'EN_PROGRESO', 'FINALIZADO'] }
-          },
+          where: { clienteId: cliente.id, tecnicoId: tecnicoId },
         });
-
         if (!trabajoExistente) {
-          console.log(
-            `[Chat Service] DENIED: Client ${cliente.id} has no job with technician ${tecnicoId}.`
-          );
-          throw new ApiError(
-            403,
-            'No puedes iniciar una conversación si no existe un trabajo asignado con este técnico.'
-          );
+          throw ApiError.forbidden('No puedes iniciar una conversación si no existe un trabajo asignado con este técnico.');
         }
-        console.log(
-          `[Chat Service] ALLOWED: Client ${cliente.id} has a job with technician ${tecnicoId}.`
-        );
+
+        chatWhereCondition = { clienteId: cliente.id, tecnicoId: tecnico.id, adminId: null };
+        chatCreateData = { clienteId: cliente.id, tecnicoId: tecnico.id };
+        includeTarget = { tecnico: this.includeTecnico() };
+
+      } else if (adminId) {
+        const admin = await prisma.user.findUnique({ where: { id: adminId, rol: Rol.ADMIN } });
+        if (!admin) throw ApiError.notFound('Administrador no encontrado');
+
+        chatWhereCondition = { clienteId: cliente.id, adminId: admin.id, tecnicoId: null };
+        chatCreateData = { clienteId: cliente.id, adminId: admin.id };
+        includeTarget = { admin: this.includeAdmin() };
+      } else {
+        throw ApiError.badRequest('Para un cliente, se debe proporcionar un tecnicoId o un adminId');
       }
 
-      const tecnico = await prisma.tecnico.findUnique({
-        where: { id: tecnicoId },
-        select: { id: true, userId: true, user: { select: { rol: true } } },
-      });
-      if (!tecnico) {
-        throw ApiError.notFound('Técnico no encontrado');
+    } else if (userRol === Rol.TECNICO) {
+      if (!clienteId) {
+        throw ApiError.badRequest('Para un técnico, se debe proporcionar un clienteId');
       }
+      
+      const tecnico = await this.getUserProfile(userId, Rol.TECNICO);
+      const cliente = await prisma.cliente.findUnique({ where: { id: clienteId } });
+      if (!cliente) throw ApiError.notFound('Cliente no encontrado');
+
+      // Opcional: Podrías agregar una validación similar a la del cliente aquí si es necesario
+
       chatWhereCondition = { clienteId: cliente.id, tecnicoId: tecnico.id, adminId: null };
       chatCreateData = { clienteId: cliente.id, tecnicoId: tecnico.id };
-      includeTarget = {
-        tecnico: {
-          select: {
-            id: true,
-            oficio: true,
-            user: {
-              select: {
-                id: true,
-                nombre: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      };
-    } else if (adminId) {
-      const admin = await prisma.user.findUnique({
-        where: { id: adminId, rol: Rol.ADMIN },
-        select: { id: true, rol: true, nombre: true, avatarUrl: true },
-      });
-      if (!admin) {
-        throw ApiError.notFound('Administrador no encontrado');
-      }
-      chatWhereCondition = { clienteId: cliente.id, adminId: admin.id, tecnicoId: null };
-      chatCreateData = { clienteId: cliente.id, adminId: admin.id };
-      includeTarget = {
-        admin: {
-          select: {
-            id: true,
-            nombre: true,
-            avatarUrl: true,
-          },
-        },
-      };
+      includeTarget = { cliente: this.includeCliente() };
+
     } else {
-      throw ApiError.badRequest('Se debe proporcionar un tecnicoId o un adminId');
+      throw ApiError.forbidden('Este rol de usuario no puede iniciar conversaciones');
     }
 
     // Buscar conversación existente
     let chat = await prisma.chat.findFirst({
       where: chatWhereCondition,
       include: {
-        cliente: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                id: true,
-                nombre: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-        ...includeTarget,
+        cliente: this.includeCliente(),
+        tecnico: this.includeTecnico(),
+        admin: this.includeAdmin(),
       },
     });
 
@@ -121,19 +78,9 @@ export class ChatService {
       chat = await prisma.chat.create({
         data: chatCreateData,
         include: {
-          cliente: {
-            select: {
-              id: true,
-              user: {
-                select: {
-                  id: true,
-                  nombre: true,
-                  avatarUrl: true,
-                },
-              },
-            },
-          },
-          ...includeTarget,
+            cliente: this.includeCliente(),
+            tecnico: this.includeTecnico(),
+            admin: this.includeAdmin(),
         },
       });
     }
@@ -455,6 +402,35 @@ export class ChatService {
     });
 
     return result;
+  }
+
+  private includeCliente() {
+    return {
+      select: {
+        id: true,
+        user: { select: { id: true, nombre: true, avatarUrl: true } },
+      },
+    };
+  }
+
+  private includeTecnico() {
+    return {
+      select: {
+        id: true,
+        oficio: true,
+        user: { select: { id: true, nombre: true, avatarUrl: true } },
+      },
+    };
+  }
+
+  private includeAdmin() {
+    return {
+      select: {
+        id: true,
+        nombre: true,
+        avatarUrl: true,
+      },
+    };
   }
 
   /**

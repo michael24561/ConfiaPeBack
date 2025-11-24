@@ -1,7 +1,7 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
 import { EstadoTrabajo } from '@prisma/client';
+import { platformConfig } from '../config/mercadopago';
 
 export class DashboardService {
   /**
@@ -72,12 +72,12 @@ export class DashboardService {
       }),
     ]);
 
-    // Calcular ingresos netos (95% del total)
+    // Calcular ingresos netos
     const ingresosBrutos = trabajosCompletadosParaIngresos.reduce(
-      (sum: number, job: { precio: Prisma.Decimal | null }) => sum + Number(job.precio || 0),
+      (sum: number, job: { precio: number | null }) => sum + Number(job.precio || 0),
       0
     );
-    const ingresosNetos = ingresosBrutos * 0.95;
+    const ingresosNetos = ingresosBrutos * (1 - platformConfig.feePercentage / 100);
 
     // Formatear datos
     const estadosCounts = {
@@ -175,7 +175,7 @@ export class DashboardService {
 
     // Calcular totales
     const ingresoBrutoTotal = trabajos.reduce((sum, t) => sum + Number(t.precio || 0), 0);
-    const ingresoNetoTotal = ingresoBrutoTotal * 0.95; // Aplicar comisión del 5%
+    const ingresoNetoTotal = ingresoBrutoTotal * (1 - platformConfig.feePercentage / 100);
 
     // Agrupar por fecha para gráfico (usando ingreso bruto para el detalle)
     const ingresosPorFecha: Record<string, number> = {};

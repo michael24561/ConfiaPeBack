@@ -15,11 +15,6 @@ export class ChatController {
       const userId = req.user!.id;
       const userRol = req.user!.rol;
 
-      // Solo clientes pueden iniciar conversaciones
-      if (userRol !== 'CLIENTE') {
-        throw ApiError.forbidden('Solo los clientes pueden iniciar conversaciones');
-      }
-
       const data = req.body as CreateConversationInput;
       const userRolTyped = userRol as Rol;
 

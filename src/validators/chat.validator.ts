@@ -5,12 +5,16 @@ export const createConversationSchema = z.object({
   body: z.object({
     tecnicoId: z.string().uuid('El ID del técnico debe ser un UUID válido').optional(),
     adminId: z.string().uuid('El ID del administrador debe ser un UUID válido').optional(),
-  }).refine(data => data.tecnicoId || data.adminId, {
-    message: 'Se debe proporcionar un tecnicoId o un adminId',
-    path: ['tecnicoId', 'adminId'],
-  }).refine(data => !(data.tecnicoId && data.adminId), {
-    message: 'No se puede proporcionar un tecnicoId y un adminId al mismo tiempo',
-    path: ['tecnicoId', 'adminId'],
+    clienteId: z.string().uuid('El ID del cliente debe ser un UUID válido').optional(),
+  }).refine(data => data.tecnicoId || data.adminId || data.clienteId, {
+    message: 'Se debe proporcionar un tecnicoId, adminId o clienteId',
+    path: ['tecnicoId', 'adminId', 'clienteId'],
+  }).refine(data => {
+    const provided = [data.tecnicoId, data.adminId, data.clienteId].filter(Boolean);
+    return provided.length === 1;
+  }, {
+    message: 'Se debe proporcionar solo un ID (tecnicoId, adminId, o clienteId)',
+    path: ['tecnicoId', 'adminId', 'clienteId'],
   }),
 });
 
