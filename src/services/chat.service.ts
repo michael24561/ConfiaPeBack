@@ -12,8 +12,6 @@ export class ChatService {
 
     let chatWhereCondition: any;
     let chatCreateData: any;
-    let includeTarget: any;
-
     if (userRol === Rol.CLIENTE) {
       const cliente = await this.getUserProfile(userId, Rol.CLIENTE);
       
@@ -31,7 +29,6 @@ export class ChatService {
 
         chatWhereCondition = { clienteId: cliente.id, tecnicoId: tecnico.id, adminId: null };
         chatCreateData = { clienteId: cliente.id, tecnicoId: tecnico.id };
-        includeTarget = { tecnico: this.includeTecnico() };
 
       } else if (adminId) {
         const admin = await prisma.user.findUnique({ where: { id: adminId, rol: Rol.ADMIN } });
@@ -39,7 +36,6 @@ export class ChatService {
 
         chatWhereCondition = { clienteId: cliente.id, adminId: admin.id, tecnicoId: null };
         chatCreateData = { clienteId: cliente.id, adminId: admin.id };
-        includeTarget = { admin: this.includeAdmin() };
       } else {
         throw ApiError.badRequest('Para un cliente, se debe proporcionar un tecnicoId o un adminId');
       }
@@ -57,7 +53,6 @@ export class ChatService {
 
       chatWhereCondition = { clienteId: cliente.id, tecnicoId: tecnico.id, adminId: null };
       chatCreateData = { clienteId: cliente.id, tecnicoId: tecnico.id };
-      includeTarget = { cliente: this.includeCliente() };
 
     } else {
       throw ApiError.forbidden('Este rol de usuario no puede iniciar conversaciones');

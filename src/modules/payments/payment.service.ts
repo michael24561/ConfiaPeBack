@@ -95,6 +95,14 @@ export class PaymentService {
           auto_return: 'approved',
         },
       });
+      
+      // Explicitly check for id and init_point
+      if (!preferenceResponse.id) {
+        throw new ApiError(500, 'Error al crear la preferencia de pago: ID de preferencia no recibido de Mercado Pago.');
+      }
+      if (!preferenceResponse.init_point) {
+        throw new ApiError(500, 'Error al crear la preferencia de pago: Punto de inicio no recibido de Mercado Pago.');
+      }
 
       // 6. Guardar el ID de la preferencia en nuestro registro
       await prisma.pago.update({
