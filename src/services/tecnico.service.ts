@@ -484,6 +484,7 @@ export class TecnicoService {
    * Actualiza los horarios del técnico
    */
   async updateHorarios(userId: string, data: UpdateHorariosInput) {
+    console.log(`[TecnicoService] Updating horarios for userId=${userId}`, data);
     const tecnico = await prisma.tecnico.findUnique({
       where: { userId },
     });
@@ -495,6 +496,7 @@ export class TecnicoService {
     const operations = [];
 
     for (const [diaSemana, horario] of Object.entries(data)) {
+      console.log(`[TecnicoService] Processing day: ${diaSemana}`, horario);
       if (horario && typeof horario === 'object' && 'disponible' in horario) {
         operations.push(
           prisma.horario.upsert({

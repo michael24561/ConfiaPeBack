@@ -14,11 +14,11 @@ export class ChatService {
     let chatCreateData: any;
     if (userRol === Rol.CLIENTE) {
       const cliente = await this.getUserProfile(userId, Rol.CLIENTE);
-      
+
       if (tecnicoId) {
         const tecnico = await prisma.tecnico.findUnique({ where: { id: tecnicoId } });
         if (!tecnico) throw ApiError.notFound('Técnico no encontrado');
-        
+
         // VALIDACIÓN: Cliente solo puede chatear con técnico si hay trabajo en común.
         const trabajoExistente = await prisma.trabajo.findFirst({
           where: { clienteId: cliente.id, tecnicoId: tecnicoId },
@@ -44,7 +44,7 @@ export class ChatService {
       if (!clienteId) {
         throw ApiError.badRequest('Para un técnico, se debe proporcionar un clienteId');
       }
-      
+
       const tecnico = await this.getUserProfile(userId, Rol.TECNICO);
       const cliente = await prisma.cliente.findUnique({ where: { id: clienteId } });
       if (!cliente) throw ApiError.notFound('Cliente no encontrado');
@@ -70,14 +70,30 @@ export class ChatService {
 
     // Si no existe, crear nueva conversación
     if (!chat) {
-      chat = await prisma.chat.create({
-        data: chatCreateData,
-        include: {
+      try {
+        chat = await prisma.chat.create({
+          data: chatCreateData,
+          include: {
             cliente: this.includeCliente(),
             tecnico: this.includeTecnico(),
             admin: this.includeAdmin(),
-        },
-      });
+          },
+        });
+      } catch (error: any) {
+        // Si falla por restricción única (race condition), buscar de nuevo
+        if (error.code === 'P2002') {
+          chat = await prisma.chat.findFirst({
+            where: chatWhereCondition,
+            include: {
+              cliente: this.includeCliente(),
+              tecnico: this.includeTecnico(),
+              admin: this.includeAdmin(),
+            },
+          });
+        } else {
+          throw error;
+        }
+      }
     }
 
     return chat;

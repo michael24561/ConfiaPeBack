@@ -108,12 +108,23 @@ export class DisponibilidadService {
      * Retorna los slots disponibles o si el día está bloqueado
      */
     async checkAvailability(tecnicoId: string, dateStr: string) {
-        const date = new Date(dateStr);
+        console.log(`[DisponibilidadService] Checking availability for tecnico=${tecnicoId}, date=${dateStr}`);
+
+        // Fix: Parse manually to avoid UTC/Local timezone shifts
+        const parts = dateStr.split('-').map(Number);
+        if (parts.length !== 3) throw new Error('Invalid date format');
+        const [year, month, day] = parts;
+        if (year === undefined || month === undefined || day === undefined) {
+            throw new Error('Invalid date format: missing parts');
+        }
+        const date = new Date(year, month - 1, day);
         const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, ...
 
         // Mapear getDay() a enum DiaSemana
         const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
         const diaSemana = dias[dayOfWeek];
+
+        console.log(`[DisponibilidadService] Parsed date: ${date.toDateString()}, DayOfWeek: ${diaSemana}`);
 
         // 1. Buscar excepción para esa fecha
         const exception = await prisma.disponibilidadExcepcion.findUnique({
@@ -127,6 +138,7 @@ export class DisponibilidadService {
 
         // Si hay excepción, esa manda
         if (exception) {
+            console.log(`[DisponibilidadService] Exception found:`, exception);
             if (!exception.disponible) {
                 return { available: false, reason: exception.motivo || 'No disponible' };
             }
@@ -148,6 +160,8 @@ export class DisponibilidadService {
                 diaSemana: diaSemana as any, // Cast to any to avoid strict enum type issues in this context
             },
         });
+
+        console.log(`[DisponibilidadService] Regular schedule found:`, horario);
 
         if (!horario || !horario.disponible) {
             return { available: false, reason: 'Día no laborable' };

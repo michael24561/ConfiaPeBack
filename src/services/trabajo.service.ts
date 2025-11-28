@@ -315,7 +315,7 @@ export class TrabajoService {
   async cancelarTrabajo(trabajoId: string, userId: string, userRol: Rol) {
     const trabajo = await this._getTrabajoAndValidateOwner(trabajoId, userId, userRol)
 
-    if (!['ACEPTADO', 'EN_PROGRESO'].includes(trabajo.estado)) {
+    if (!['PENDIENTE', 'ACEPTADO', 'EN_PROGRESO'].includes(trabajo.estado)) {
       throw ApiError.badRequest(`No se puede cancelar un trabajo en estado ${trabajo.estado}`)
     }
 

@@ -298,6 +298,8 @@ model Chat {
   @@index([clienteId])
   @@index([tecnicoId]) // Keep index for performance
   @@index([adminId])   // New index for performance
+  @@unique([clienteId, tecnicoId])
+  @@unique([clienteId, adminId])
   @@map("chats")
 }
 
