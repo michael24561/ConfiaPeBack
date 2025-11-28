@@ -7,6 +7,7 @@ import {
   UpdateTecnicoInput,
   AddServicioInput,
   AddCertificadoInput,
+  UpdateCertificadoInput,
   AddGaleriaInput,
   UpdateHorariosInput,
   UpdateConfiguracionInput,
@@ -142,6 +143,52 @@ export class TecnicoController {
       const result = await tecnicoService.addCertificado(req.user.id, data, file);
 
       successResponse(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/tecnicos/me/certificados/:id
+   * Elimina un certificado del técnico
+   */
+  async deleteCertificado(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw ApiError.unauthorized('Usuario no autenticado');
+      }
+
+      const { id } = req.params;
+      if (!id) {
+        throw ApiError.badRequest('ID de certificado requerido');
+      }
+      const result = await tecnicoService.deleteCertificado(req.user.id, id);
+
+      successResponse(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PUT /api/tecnicos/me/certificados/:id
+   * Actualiza un certificado del técnico
+   */
+  async updateCertificado(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw ApiError.unauthorized('Usuario no autenticado');
+      }
+
+      const { id } = req.params;
+      if (!id) {
+        throw ApiError.badRequest('ID de certificado requerido');
+      }
+
+      const data: UpdateCertificadoInput = req.body;
+      const result = await tecnicoService.updateCertificado(req.user.id, id, data);
+
+      successResponse(res, result, 200);
     } catch (error) {
       next(error);
     }

@@ -62,6 +62,20 @@ export const addCertificadoSchema = z.object({
 export type AddCertificadoInput = z.infer<typeof addCertificadoSchema>['body'];
 
 /**
+ * Schema para actualizar certificado
+ */
+export const updateCertificadoSchema = z.object({
+  body: z.object({
+    nombre: z.string().min(3).max(100).optional(),
+    institucion: z.string().max(100).optional(),
+    fechaObtencion: z.string().datetime().optional(),
+  }),
+});
+
+export type UpdateCertificadoInput = z.infer<typeof updateCertificadoSchema>['body'];
+
+
+/**
  * Schema para agregar imagen a galería
  */
 export const addGaleriaSchema = z.object({

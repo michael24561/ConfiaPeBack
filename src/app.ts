@@ -14,7 +14,7 @@ import notificacionRoutes from './routes/notificacion.routes';
 import calificacionRoutes from './routes/calificacion.routes';
 import servicioRoutes from './routes/servicio.routes';
 import uploadRoutes from './routes/upload.routes';
-import adminRoutes from './routes/admin.routes';
+import adminRoutes from './modules/admin/admin.routes'; // Updated to use modular admin routes
 import userRoutes from './routes/user.routes';
 import reporteRoutes from './routes/reporte.routes';
 import { setupSwagger } from './config/swagger';

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { tecnicoController } from '../controllers/tecnico.controller';
+import { disponibilidadController } from '../controllers/disponibilidad.controller';
 import { validateMiddleware } from '../middlewares/validation.middleware';
 import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.middleware';
 import { roleMiddleware } from '../middlewares/auth.middleware';
@@ -9,6 +10,7 @@ import {
   updateTecnicoSchema,
   addServicioSchema,
   addCertificadoSchema,
+  updateCertificadoSchema,
   addGaleriaSchema,
   updateHorariosSchema,
   updateConfiguracionSchema,
@@ -128,6 +130,33 @@ router.post(
 );
 
 /**
+ * DELETE /api/tecnicos/me/certificados/:id
+ * Elimina un certificado
+ * Requiere: Auth + Rol TECNICO
+ */
+router.delete(
+  '/me/certificados/:id',
+  authMiddleware,
+  roleMiddleware(Rol.TECNICO),
+  tecnicoController.deleteCertificado.bind(tecnicoController)
+);
+
+/**
+ * PUT /api/tecnicos/me/certificados/:id
+ * Actualiza un certificado
+ * Requiere: Auth + Rol TECNICO
+ * Body: { nombre?, institucion?, fechaObtencion? }
+ */
+router.put(
+  '/me/certificados/:id',
+  authMiddleware,
+  roleMiddleware(Rol.TECNICO),
+  validateMiddleware(updateCertificadoSchema),
+  tecnicoController.updateCertificado.bind(tecnicoController)
+);
+
+
+/**
  * POST /api/tecnicos/me/galeria
  * Agrega una imagen a la galería
  * Requiere: Auth + Rol TECNICO
@@ -224,6 +253,36 @@ router.patch(
   authMiddleware,
   roleMiddleware(Rol.ADMIN),
   tecnicoController.rejectTecnicoValidation.bind(tecnicoController)
+);
+
+/**
+ * RUTAS DE DISPONIBILIDAD (EXCEPCIONES)
+ */
+
+router.post(
+  '/me/disponibilidad/excepciones',
+  authMiddleware,
+  roleMiddleware(Rol.TECNICO),
+  disponibilidadController.addException.bind(disponibilidadController)
+);
+
+router.get(
+  '/me/disponibilidad/excepciones',
+  authMiddleware,
+  roleMiddleware(Rol.TECNICO),
+  disponibilidadController.getExceptions.bind(disponibilidadController)
+);
+
+router.delete(
+  '/me/disponibilidad/excepciones/:id',
+  authMiddleware,
+  roleMiddleware(Rol.TECNICO),
+  disponibilidadController.deleteException.bind(disponibilidadController)
+);
+
+router.get(
+  '/:tecnicoId/disponibilidad/check',
+  disponibilidadController.checkAvailability.bind(disponibilidadController)
 );
 
 export default router;

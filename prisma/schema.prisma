@@ -145,6 +145,7 @@ model Tecnico {
   configuracion       ConfiguracionTecnico?
   solicitudesServicio SolicitudServicio[]
   pagos               Pago[]                @relation("TechnicianPayments")
+  disponibilidadExcepciones DisponibilidadExcepcion[]
 
 
   @@index([oficio])
@@ -197,7 +198,23 @@ model Horario {
 
   @@unique([tecnicoId, diaSemana])
   @@index([tecnicoId, disponible])
+
   @@map("horarios")
+}
+
+model DisponibilidadExcepcion {
+  id        String   @id @default(uuid())
+  tecnicoId String
+  tecnico   Tecnico  @relation(fields: [tecnicoId], references: [id], onDelete: Cascade)
+  fecha     DateTime @db.Date // Specific date
+  disponible Boolean @default(false) // If false, day is blocked. If true, use custom hours.
+  horaInicio String? // Optional custom start time
+  horaFin    String? // Optional custom end time
+  motivo     String? // "Vacaciones", "Cita médica", etc.
+  
+  @@unique([tecnicoId, fecha])
+  @@index([tecnicoId, fecha])
+  @@map("disponibilidad_excepciones")
 }
 
 model GaleriaItem {
@@ -449,4 +466,24 @@ model Calificacion {
   @@index([trabajoId])
   @@index([userId])
   @@map("calificaciones")
+}
+
+// ====================
+// ADMIN AUDIT LOG
+// ====================
+
+model AdminLog {
+  id                String   @id @default(uuid())
+  adminUserId       String
+  adminUserEmail    String
+  accion            String   // "UPDATE_USER_STATUS", "DELETE_RATING", etc.
+  entidadAfectada   String?  // "User", "Calificacion", "Reporte"
+  idEntidadAfectada String?
+  detalles          Json?    // { "motivo": "...", "cambios": {...} }
+  timestamp         DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([timestamp])
+  @@index([entidadAfectada, idEntidadAfectada])
+  @@map("admin_logs")
 }

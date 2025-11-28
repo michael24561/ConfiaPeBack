@@ -7,6 +7,7 @@ import {
   UpdateTecnicoInput,
   AddServicioInput,
   AddCertificadoInput,
+  UpdateCertificadoInput,
   AddGaleriaInput,
   UpdateHorariosInput,
   UpdateConfiguracionInput,
@@ -41,13 +42,13 @@ export class TecnicoService {
         verificado !== undefined ? { verificado } : {},
         busqueda
           ? {
-              OR: [
-                { nombres: { contains: busqueda, mode: 'insensitive' } },
-                { apellidos: { contains: busqueda, mode: 'insensitive' } },
-                { oficio: { contains: busqueda, mode: 'insensitive' } },
-                { user: { nombre: { contains: busqueda, mode: 'insensitive' } } },
-              ],
-            }
+            OR: [
+              { nombres: { contains: busqueda, mode: 'insensitive' } },
+              { apellidos: { contains: busqueda, mode: 'insensitive' } },
+              { oficio: { contains: busqueda, mode: 'insensitive' } },
+              { user: { nombre: { contains: busqueda, mode: 'insensitive' } } },
+            ],
+          }
           : {},
       ],
     };
@@ -365,6 +366,68 @@ export class TecnicoService {
     });
 
     return certificado;
+  }
+
+  /**
+   * Elimina un certificado del técnico
+   */
+  async deleteCertificado(userId: string, certificadoId: string) {
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { userId },
+    });
+
+    if (!tecnico) {
+      throw ApiError.notFound('Perfil de técnico no encontrado');
+    }
+
+    const result = await prisma.certificado.deleteMany({
+      where: {
+        id: certificadoId,
+        tecnicoId: tecnico.id,
+      },
+    });
+
+    if (result.count === 0) {
+      throw ApiError.notFound('Certificado no encontrado o no pertenece al técnico');
+    }
+
+    return { message: 'Certificado eliminado correctamente' };
+  }
+
+  /**
+   * Actualiza un certificado del técnico
+   */
+  async updateCertificado(userId: string, certificadoId: string, data: UpdateCertificadoInput) {
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { userId },
+    });
+
+    if (!tecnico) {
+      throw ApiError.notFound('Perfil de técnico no encontrado');
+    }
+
+    // Verificar que el certificado pertenezca al técnico
+    const certificado = await prisma.certificado.findFirst({
+      where: {
+        id: certificadoId,
+        tecnicoId: tecnico.id,
+      },
+    });
+
+    if (!certificado) {
+      throw ApiError.notFound('Certificado no encontrado o no pertenece al técnico');
+    }
+
+    const updatedCertificado = await prisma.certificado.update({
+      where: { id: certificadoId },
+      data: {
+        ...(data.nombre && { nombre: data.nombre }),
+        ...(data.institucion !== undefined && { institucion: data.institucion }),
+        ...(data.fechaObtencion && { fechaObtencion: new Date(data.fechaObtencion) }),
+      },
+    });
+
+    return updatedCertificado;
   }
 
   /**

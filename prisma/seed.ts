@@ -3,46 +3,73 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+const PASSWORD = 'iDarknesl1';
+
 async function main() {
   console.log('Start seeding ...');
+  const hashedPassword = await bcrypt.hash(PASSWORD, 10);
 
-  // Crear usuario administrador
-  const adminEmail = 'admin@confia.pe';
-  const adminPassword = 'admin123';
-  const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
+  // 1. Crear usuario Administrador
+  const adminEmail = 'admin@confiape.com';
   const adminUser = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {},
     create: {
       email: adminEmail,
       password: hashedPassword,
-      nombre: 'Administrador',
+      nombre: 'Administrador Principal',
       rol: Rol.ADMIN,
       emailVerified: true,
     },
   });
-
   console.log(`Created admin user: ${adminUser.email}`);
 
-  // Crear usuarios técnicos de prueba
+  // 2. Crear usuarios Clientes
+  const clientes = [
+    { email: 'cliente1@test.com', nombre: 'Juan Pérez' },
+    { email: 'cliente2@test.com', nombre: 'María García' },
+  ];
+
+  for (const clienteData of clientes) {
+    const user = await prisma.user.upsert({
+      where: { email: clienteData.email },
+      update: {},
+      create: {
+        email: clienteData.email,
+        password: hashedPassword,
+        nombre: clienteData.nombre,
+        rol: Rol.CLIENTE,
+        emailVerified: true,
+      },
+    });
+
+    await prisma.cliente.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: {
+        userId: user.id,
+      },
+    });
+    console.log(`Created client user: ${user.email}`);
+  }
+
+  // 3. Crear usuarios Técnicos
   const tecnicos = [
     {
-      email: 'roberto.valeriano@test.com',
-      nombre: 'ROBERTO CARLOS VALERIANO DIESTRA',
-      dni: '42043632',
+      email: 'tecnico1@test.com',
+      nombre: 'Carlos Rodríguez',
+      dni: '12345678',
       oficio: 'Electricista',
     },
     {
-      email: 'franclin.gonzales@test.com',
-      nombre: 'FRANCLIN JUNIOR GONZALES ALEJANDRIA',
-      dni: '75492475',
-      oficio: 'Gasfitero',
+      email: 'tecnico2@test.com',
+      nombre: 'Ana Martínez',
+      dni: '87654321',
+      oficio: 'Plomero',
     },
   ];
 
   for (const tecnicoData of tecnicos) {
-    const hashedPassword = await bcrypt.hash('password123', 10);
     const user = await prisma.user.upsert({
       where: { email: tecnicoData.email },
       update: {},
@@ -55,22 +82,27 @@ async function main() {
       },
     });
 
+    const nombreParts = tecnicoData.nombre.split(' ');
+    const nombres = nombreParts.slice(0, 1).join(' ');
+    const apellidos = nombreParts.slice(1).join(' ');
+
     await prisma.tecnico.upsert({
       where: { userId: user.id },
-      update: {},
+      update: {
+        oficio: tecnicoData.oficio,
+      },
       create: {
         userId: user.id,
         dni: tecnicoData.dni,
-        nombres: tecnicoData.nombre.split(' ').slice(0, 2).join(' '),
-        apellidos: tecnicoData.nombre.split(' ').slice(2).join(' '),
+        nombres: nombres,
+        apellidos: apellidos,
         oficio: tecnicoData.oficio,
-        verificado: false,
+        verificado: true, // Se crean como verificados para facilitar las pruebas
+        disponible: true,
       },
     });
-
     console.log(`Created technician user: ${user.email}`);
   }
-
 
   console.log('Seeding finished.');
 }
