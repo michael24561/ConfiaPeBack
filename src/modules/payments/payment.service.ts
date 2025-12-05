@@ -101,9 +101,9 @@ export class PaymentService {
           },
           external_reference: pago.id,
           back_urls: {
-            success: `${FRONTEND_URL}/cliente/trabajos?pago=exitoso&trabajoId=${trabajo.id}`,
-            failure: `${FRONTEND_URL}/cliente/trabajos?pago=fallido&trabajoId=${trabajo.id}`,
-            pending: `${FRONTEND_URL}/cliente/trabajos?pago=pendiente&trabajoId=${trabajo.id}`,
+            success: `${FRONTEND_URL}/cliente/trabajos/${trabajo.id}?pago=exitoso`,
+            failure: `${FRONTEND_URL}/cliente/trabajos/${trabajo.id}?pago=cancelado`,
+            pending: `${FRONTEND_URL}/cliente/trabajos/${trabajo.id}?pago=pendiente`,
           },
         },
       });

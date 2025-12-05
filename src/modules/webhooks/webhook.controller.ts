@@ -4,19 +4,23 @@ import { WebhookPayload } from '../../types/mercadopago.types';
 
 const webhookService = new WebhookService();
 
+interface WebhookRequest extends Request {
+  webhookPayload?: any;
+}
+
 export class WebhookController {
   /**
    * @summary Recibe notificaciones de Mercado Pago
-   * @description Endpoint para procesar webhooks de pagos.
+   * @description Endpoint para procesar webhooks de pagos. Ya ha sido validado por el middleware.
    * @route POST /api/webhooks/mercadopago
    */
-  async handleWebhook(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async handleWebhook(req: WebhookRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const payload = req.body as WebhookPayload;
+      const payload = req.webhookPayload as WebhookPayload;
       const topic = req.query.topic; // 'payment'
       const type = req.query.type; // 'payment' for new API
 
-      console.log('[Webhook] Notificación recibida:', { body: req.body, query: req.query });
+      console.log('[Webhook] Notificación validada y recibida:', { payload, query: req.query });
 
       // La nueva API de webhooks puede no tener 'type' en el payload, sino en el query param.
       // Nos aseguramos de que sea una notificación de pago.

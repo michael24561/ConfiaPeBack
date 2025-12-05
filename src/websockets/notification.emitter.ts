@@ -10,6 +10,6 @@ export const sendEventToUser = (userId: string, event: string, data: any) => {
     logger.info(`Enviando evento '${event}' al usuario ${userId} en el socket ${socketId}`);
     io.to(socketId).emit(event, data);
   } else {
-    logger.info(`Usuario ${userId} no está conectado. No se puede enviar el evento '${event}' en tiempo real.`);
+    logger.warn(`Usuario ${userId} no está conectado. No se puede enviar el evento '${event}' en tiempo real.`);
   }
 };

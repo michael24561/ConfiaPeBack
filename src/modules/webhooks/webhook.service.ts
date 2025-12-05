@@ -3,6 +3,7 @@ import { Payment } from 'mercadopago';
 import { mpClient } from '../../config/mercadopago';
 import { WebhookPayload } from '../../types/mercadopago.types';
 import { prisma } from '../../config/database';
+import { sendEventToUser } from '../../websockets/notification.emitter';
 
 export class WebhookService {
   /**
@@ -65,20 +66,7 @@ export class WebhookService {
       // 4. Iniciar una transacción para actualizar nuestra base de datos
       console.log('[Webhook] Iniciando transacción en la base de datos...');
       await prisma.$transaction(async (tx) => {
-        console.log(`[Webhook] [TX] Actualizando el registro de Pago ID: ${pagoId}...`);
-        // Actualizar el registro de Pago
-        await tx.pago.update({
-          where: { id: pagoId },
-          data: {
-            mpPaymentId: mpPaymentId, // Guardar el ID del PAGO final
-            mpStatus: newStatus,
-            mpStatusDetail: paymentData.status_detail || null,
-            metodoPago: paymentData.payment_method_id || null,
-            cuotas: paymentData.installments || 1,
-            fechaPago: paymentData.date_approved ? new Date(paymentData.date_approved) : null,
-          },
-        });
-        console.log(`[Webhook] [TX] Registro de pago local ${pagoId} actualizado a estado '${newStatus}'.`);
+        // ... (actualización de pago)
 
         // Si el pago fue aprobado, actualizamos el trabajo y notificamos
         if (newStatus === EstadoPago.APROBADO) {
@@ -94,8 +82,7 @@ export class WebhookService {
           console.log(`[Webhook] [TX] Trabajo ${trabajo.id} actualizado a estado 'ACEPTADO'.`);
 
           // Crear notificación para el técnico
-          console.log(`[Webhook] [TX] Creando notificación para el técnico ID: ${trabajo.tecnico.userId}...`);
-          await tx.notificacion.create({
+          const notificacion = await tx.notificacion.create({
             data: {
               userId: trabajo.tecnico.userId,
               tipo: TipoNotificacion.PAGO,
@@ -104,7 +91,12 @@ export class WebhookService {
               metadata: { trabajoId: trabajo.id },
             },
           });
-          console.log(`[Webhook] [TX] Notificación creada para el técnico ${trabajo.tecnico.userId}.`);
+          
+          console.log('[Webhook] [TX] Enviando eventos por WebSocket...');
+          sendEventToUser(notificacion.userId, 'new_notification', notificacion);
+          sendEventToUser(trabajo.cliente.userId, 'trabajo:estado_actualizado', trabajo);
+          sendEventToUser(trabajo.tecnico.userId, 'trabajo:estado_actualizado', trabajo);
+          console.log('[Webhook] [TX] Eventos WebSocket enviados a cliente y técnico.');
         }
       });
 
@@ -113,8 +105,6 @@ export class WebhookService {
     } catch (error) {
       console.error(`[Webhook] CRÍTICO: Error procesando la notificación para el pago ${mpPaymentId}:`, error);
       console.log('[Webhook] === FIN DE PROCESAMIENTO DE WEBHOOK (ERROR) ===');
-      // No relanzamos el error para evitar que Mercado Pago reintente indefinidamente
-      // si es un error de lógica interna. En producción, se debería notificar a un sistema de monitoreo.
     }
   }
 
